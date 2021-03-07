@@ -1,0 +1,281 @@
+BE,Be stars
+FU,Orion variables of the FU Orionis type
+GCAS,Gamma Cas type variables
+I,Poorly studied irregular variables
+IA,Poorly studied irregular variables of early spectral type
+IB,Poorly studied irregular variables of intermediate to late spectral type
+IN,Orion variables
+INA,Orion variables of early spectral types
+INB,Orion variables of intermediate and late spectral types
+INTIT,Orion variables of the T Tauri type
+IN(YY),Orion variables of the YY Ori type
+IS,Rapid irregular variables
+ISA,Rapid irregular variables of the early spectral types
+ISB,Rapid irregular variables of the intermediate and late spectral types
+RCB,Variables of the R Coronae Borealis type
+RS,RS Canum Venaticorum-type systems
+SDOR,Variables of the S Doradus type
+UV,Eruptive variables of the UV Ceti type
+UVN,Flaring Orion variables of spectral types Ke-Me
+WR,Possible Wolf-Rayet Star
+ACYG,Alpha Cygni type variables
+BCEP,Beta Cephei type variables
+BCEPS,A short-period group of Beta Cep variables
+BLBOO,Anomalous Cepheids
+CEP,Cepheids
+CEP(B),Cepheids (TU Cas, V 367 Sct) displaying the presence of two or more simultaneously operating pulsation modes
+CW,Variables of the W Virginis type
+CWA,W Vir variables with periods longer than 8 days (W Vir)
+CWB,W Vir variables with periods shorter than 8 days (BL Her)
+DCEP,Delta Cep-type variables
+DCEPS,Delta Cep variables having light amplitudes
+DSCT,Delta Scuti type variables
+DSCTC,Low amplitude group of Delta Sct variables
+GDOR, Gamma Doradus stars
+L,Unstudied variable stars with slow light changes
+LB,Slow irregular variables of late spectral types
+LC,Irregular variable supergiants of late spectral types
+LPB,Long-period pulsating B stars
+M,Mira (Omicron) Ceti-type variables
+PVTEL,Variables of the PV Telescopii type
+RPHS,Very rapidly pulsating hot (subdwarf B) stars
+RR,Possible Star of RR Lyr type
+RR(B),RR Lyrae variables showing two simultaneously operating pulsation modes
+RRAB,RR Lyrae variables with asymmetric light curves
+RRC,RR Lyrae variables with nearly symmetric light curves
+RV,Variables of the RV Tauri type
+RVA,RV Tauri variables that do not vary in mean magnitude (AC Her)
+RVB,RV Tauri variables that periodically vary in mean magnitude (DF Cyg, RV Tau)
+SR,SuperNova Remnant Candidate
+SRA,Semiregular late-type giants displaying persistent periodicity 
+SRB,Semiregular late-type giants with poorly defined periodicity
+SRC,Semiregular late-type supergiants (Mu Cep) 
+SRD,Semiregular variable giants and supergiants of F, G, or K spectral types
+SRS, Semiregular pulsating red giants
+SXPHE,Pulsating subdwarfs
+ZZ,ZZ Ceti variables
+ZZA,ZZ Cet-type variables of DA spectral type (ZZ Cet)
+ZZB,ZZ Cet-type variables of DB spectral type
+ZZO,ZZ Cet type variables of the DO spectral type
+ACV,Alpha2 Canum Venaticorum variables
+ACVO,Rapidly oscillating Alpha2 CVn variables
+BY,BY Draconis-type variables
+ELL,Rotating ellipsoidal variables (b Per, Alpha Vir)
+FKCOM,FK Comae Berenices-type variables
+PSR,Optically variable pulsars (CM Tau)
+R,Close binary systems with re-radiation (Prototype: AU Ari)
+SXARI,SX Arietis-type variables
+N,Novae
+NA,Fast novae
+NB,Slow novae (RR Pic)
+NC,Novae with a very slow development
+NL,Novalike variables
+NR,Recurrent novae
+SN,SuperNova Candidate
+SNI,Type I supernovae
+SNII,Type II supernovae
+UG,U Geminorum-type variables
+UGSS,SS Cygni-type variables (SS Cyg, U Gem)
+UGSU,SU Ursae Majoris-type variables
+UGZ,Z Camelopardalis-type stars
+ZAND,Symbiotic variables of the Z Andromedae type
+E,Eclipsing binary systems
+EA,Algol-type eclipsing systems
+EB,Beta Lyrae-type eclipsing systems
+EP, Stars showing eclipses by their planets
+EW,W Ursae Majoris-type eclipsing variables
+GS,Systems with one or both giant and supergiant components
+PN,Possible Planetary Nebula
+WD,White Dwarf Candidate
+AR,Detached systems of the AR Lacertae type
+D,Detached systems, with components not filling their inner Roche lobes
+DM,Detached main-sequence systems
+DS,Detached systems with a subgiant
+DW,Systems similar to W UMa systems in physical properties but not in contact
+K,Contact systems, both components filling their inner critical surfaces
+KE,Contact systems of early (O-A) spectral type, both components being close in size to their inner critical surfaces
+KW,Contact systems of the W UMa type, with ellipsoidal components of F0-K spectral type
+SD,Semidetached systems in which the surface of the less massive component is close to its inner Roche lobe
+AM,AM Her type variables
+X,X-ray source 
+XB,X-ray binary Candidate
+XF,Fluctuating X-ray systems showing rapid variations of X-ray (V1357 Cyg) and optical (V821 Ara) radiation on time scales of dozens of milliseconds;
+XI,X-ray irregulars
+XJ,X-ray binaries
+XND,X-ray, novalike (transient) systems containing, along with a hot compact object, a dwarf or subgiant of G-M spectral type
+XNG,X-ray, novalike (transient) systems with an early-type supergiant or giant primary component and a hot compact object as a companion
+XP,X-ray pulsar systems
+XPR,X-ray pulsar systems featuring the presence of the reflection effect
+XPRM,,X-ray systems consisting of a late-type dwarf (dK-dM) and a pulsar
+XM,with a strong magnetic field
+BLLAC,Extragalactic BL Lacertae-type objects
+CST,Nonvariable stars, formerly suspected to be variable and hastily designated
+GAL,Optically variable quasistellar extragalactic objects (active galactic nuclei [AGNs]) considered to be variable stars by mistake
+QSO,Optically variable quasistellar extragalactic sources (quasars) that earlier were erroneously considered to be variable stars
+S,Unstudied variable stars with rapid light changes
+ev,transient event
+Rad,Radio-source
+mR,metric Radio-source
+cm,centimetric Radio-source
+mm,millimetric Radio-source
+smm,sub-millimetric source
+HI,HI (21cm) source
+rB,radio Burst
+Mas,Maser
+IR,Infra-Red source
+FIR,Far-IR source
+NIR,Near-IR source
+red,Very red source
+ERO,Extremely Red Object
+blu,Blue object
+UX,Ultra-luminous X-ray candidate
+ULX,Ultra-luminous X-ray source
+gam,gamma-ray source
+gB,gamma-ray Burst
+err,Not an object (error, artefact, ...)
+grv,Gravitational Source
+Lev,(Micro)Lensing Event
+LS,Possible gravitational lens System
+Le,Possible gravitational lens
+LI,Possible gravitationally lensed image
+gLe,Gravitational Lens
+gLS,Gravitational Lens System (lens+images)
+GWE,Gravitational Wave Event
+..,Candidate objects
+G,Galaxy
+SC,Possible Supercluster of Galaxies
+C?G,Possible Cluster of Galaxies
+Gr,Possible Group of Galaxies
+Sy,Symbiotic Star
+CV,Cataclysmic Variable Star
+No,Nova Candidate
+LX,Low-Mass X-ray binary Candidate
+HX,High-Mass X-ray binary Candidate
+Y*,Young Stellar Object Candidate
+pr,Pre-main sequence Star
+C*,Possible Carbon Star
+S*,Possible S Star
+OH,OH/IR star
+CH,Star with envelope of CH type
+Ae,Herbig Ae/Be star
+HB,Horizontal Branch Star
+Ce,Possible Cepheid
+RB,Possible Red Giant Branch star
+sg,Evolved supergiant star
+s?r,Possible Red supergiant star
+s?y,Possible Yellow supergiant star
+s?b,Possible Blue supergiant star
+AB,Asymptotic Giant Branch Star (He-burning)
+LP,Long-period variable star
+pA,Post-AGB Star (proto-PN)
+BS,Blue Straggler Star
+HS,Hot subdwarf
+N*,Neutron Star Candidate
+BH,Black Hole Candidate
+LM,Low-mass star (M<1solMass)
+BD,Brown Dwarf (M<0.08solMass)
+mul,Composite object
+reg,Region defined in the sky
+vid,Underdense region of the Universe
+SCG,Supercluster of Galaxies
+ClG,Cluster of Galaxies
+GrG,Group of Galaxies
+CGG,Compact Group of Galaxies
+PaG,Pair of Galaxies
+IG,Interacting Galaxies
+C,Carbon Star
+Gl,Possible Globular Cluster
+Cl,Cluster of Stars
+GlC,Globular Cluster
+OpC,Open (galactic) Cluster
+As,Association of Stars
+St,Stellar Stream
+MGr,Moving Group
+,Unique variable stars outside the range of the classifications
+*,Double or multiple star
+SB,Spectroscopic binary
+El,Ellipsoidal variable Star
+DQ,CV DQ Her type (intermediate polar)
+DN,Dwarf Nova
+LXB,Low Mass X-ray Binary
+HXB,High Mass X-ray Binary
+ISM,Interstellar matter
+PoC,Part of Cloud
+CGb,Cometary Globule
+bub,Bubble
+EmO,Emission Object
+Cld,Cloud
+GNe,Galactic Nebula
+BNe,Bright Nebula
+DNe,Dark Cloud (nebula)
+RNe,Reflection Nebula
+MoC,Molecular Cloud
+glb,Globule (low-mass dark cloud)
+cor,Dense core
+SFR,Star forming region
+HVC,High-velocity Cloud
+HII,HII (ionized) region
+sh,HI shell
+SNR,SuperNova Remnant
+cir,CircumStellar matter
+of,Outflow candidate
+out,Outflow
+HH,Herbig-Haro Object
+*iC,Star in Cluster
+*iN,Star in Nebula
+*iA,Star in Association
+*i,Star in double system
+V*,Star suspected of Variability
+Pe,Peculiar Star
+Y*O,Young Stellar Object
+Em,Emission-line Star
+RG,Red Giant Branch star
+s*r,Red supergiant star
+s*y,Yellow supergiant star
+s*b,Blue supergiant star
+TT,T Tau-type Star
+PM,High proper-motion Star
+HV,High-velocity Star
+V,Variable Star
+Er,Eruptive variable Star
+Fl,Flare Star
+Ro,Rotationally variable Star
+Pu,Pulsating variable Star
+SX,Variable Star of SX Phe type (subdwarf)
+sr,Semi-regular pulsating Star
+su,Sub-stellar object
+Pl,Extra-solar Planet
+PoG,Part of a Galaxy
+GiC,Galaxy in Cluster of Galaxies
+BiC,Brightest galaxy in a Cluster (BCG)
+GiG,Galaxy in Group of Galaxies
+GiP,Galaxy in Pair of Galaxies
+HzG,Galaxy with high redshift
+ALS,Absorption Line system
+LyA,Ly alpha Absorption Line system
+DLA,Damped Ly-alpha Absorption Line system
+mAL,metallic Absorption Line system
+LLS,Lyman limit system
+BAL,Broad Absorption Line system
+rG,Radio Galaxy
+H2G,HII Galaxy
+LSB,Low Surface Brightness Galaxy
+AG,Possible Active Galaxy Nucleus
+Q,Possible Quasar
+Bz,Possible Blazar
+BL,Possible BL Lac
+EmG,Emission-line galaxy
+SBG,Starburst Galaxy
+bCG,Blue compact Galaxy
+LeI,Gravitationally Lensed Image
+LeG,Gravitationally Lensed Image of a Galaxy
+LeQ,Gravitationally Lensed Image of a Quasar
+AGN,Active Galaxy Nucleus
+LIN,LINER-type Active Galaxy Nucleus
+SyG,Seyfert Galaxy
+Sy1,Seyfert 1 Galaxy
+Sy2,Seyfert 2 Galaxy
+Bla,Blazar
+BLL,BL Lac - type object
+OVV,Optically Violently Variable object
+VAR,Variable
