@@ -14,7 +14,8 @@
 # * query_asas_sn
 # 
 # organizing object types:
-# 
+# * get_var_descr
+# * get_var_hier
 # 
 # -- TODO ----------------------------------------------------------------------
 # 
@@ -337,40 +338,18 @@ def query_asas_sn(data_dir='./', sector='all', diag_plot=True):
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
         
-def get_otype_descr():
-    
+def get_var_descr():
+    '''Reads docs/var_descr.txt to create a dictionary, where keys are the
+    variability type abbrievations, and the values are human-understandable
+    descriptions.'''
     d = {}
-    with open('docs/otype_descr.txt', 'r') as f:
+    with open('docs/var_descr.txt', 'r') as f:
         lines = f.readlines()
-        for line in lines:
+        for line in lines[1:]:
             key = line.split(',')[0]
-            val = ','.join(line.split(',')[1:])[:-2]
+            val = ','.join(line.split(',')[1:])[:-1]
             d[key] = val
-
-    return d
-        
-
-def get_otype_dict(data_dir='/nfs/blender/data/tdaylan/data/',
-                   uncertainty_flags=[':', '?', '*']):
-    '''Return a dictionary of object type descriptions.'''
-    
-    d = {}
-        
-    with open(data_dir + 'gcvs_labels.txt', 'r') as f:
-        lines = f.readlines()
-    for line in lines:
-        otype, description = line.split(' = ')
-        
-        # >> remove uncertainty flags
-        if otype[-1] in uncertainty_flags:
-            otype = otype[:-1]
-        
-        # >> remove new line character
-        description = description.replace('\n', '')
-        
-        d[otype] = description
-        
-    return d
+    return d        
 
 
 def make_parent_dict():    
@@ -429,7 +408,7 @@ def make_variability_tree():
                       'R', 'SXARI'],
          'cataclysmic':
              ['N', 'NA', 'NB', 'NC', 'NL', 'NR', 'SN', 'SNI', 'SNII', 'UG',
-              'UGSS', 'UGSU', 'UGZ', 'ZAND'],
+              'UGSS', 'UGSU', 'UGZ', 'ZAND', 'DQ'],
          'eclipsing':
              ['E', 'EA', 'EB', 'EP', 'EW', 'GS', 'PN', 'RS', 'WD', 'WR', 'AR',
               'D', 'DM', 'DS', 'DW', 'K', 'KE', 'KW', 'SD'],
@@ -460,7 +439,11 @@ def make_redundant_otype_dict():
               'ZZ', 'ZZA', 'ZZB', 'ZZO'],
          'LP': var_d['eruptive']+var_d['pulsating']+var_d['rotating']+\
          var_d['cataclysmic']+var_d['eclipsing']+var_d['xray']+var_d['other'],
-         'RR': ['CEP']
+         'RR': ['CEP'],
+         'X': var_d['xray'],
+         'BE': ['GCAS'],
+         'CV': var_d['cataclysmic'],
+         'DSCT(B:)': ['DSCT']
          }
     parents = list(d.keys())
 
@@ -503,7 +486,7 @@ def merge_otype(otype_list):
 
             
     otype_list = np.unique(new_otype_list).astype('str')
-    otype = np.delete(otype, np.where(otype == ''))
+    otype_list = np.delete(otype_list, np.where(otype_list == ''))
     return otype_list
 
 
@@ -627,15 +610,18 @@ def get_parents_only(class_info, parent_dict=None,
     
     return new_class_info
 
-def make_remove_class_list(simbad=False, rmv_flagged=True):
+def make_remove_class_list(catalog=None, rmv_flagged=True):
     '''Currently, our pipeline can only do clustering based on photometric data.
     So classes that require spectroscopic data, etc. are removed.'''
-    rmv = ['PM', 'IR', 'nan', 'V', 'VAR', 'As', 'SB', 'LM', 'blu', 'EmO', 'S',
-           ]
-    sequence_descriptors = ['AB', 'HS', 'BS', 'YSO', 'Y', 'sg', 'BD', 's*b']
+    rmv = ['PM', 'IR', 'nan', 'V', 'V*', 'VAR', 'As', 'SB', 'LM', 'blu', 'EmO',
+           'S', 'Rad', 'C', 'mul', 'I', 'IA', 'IB', 'G', 'Sy', 'Sy1', 'Sy2',
+           'QSO']
+    sequence_descriptors = ['AB', 'HS', 'BS', 'YSO', 'Y', 'sg', 'BD', 's*b',
+                            'Y*', 's?r', 's?b', 's*y', 'Y*O', 'RG', 'HB']
 
-    if simbad:
-        rmv.append('UV')
+    if catalog == 'simbad':
+        rmv.append('UV') # >> UV refers UV Ceti type variables in GCVS but
+                         # >> stars with strong UV radiation in SIMBAD
 
     if rmv_flagged:
         flagged = make_flagged_class_list()
@@ -651,44 +637,55 @@ def make_flagged_class_list():
     eclip = ['GS', 'PN', 'RS', 'WD', 'WR', 'AR', 'D', 'DM', 'DS', 'DW', 'K',
              'KE', 'KW', 'SD'] 
 
-    flagged = ['Em', 'Pe']
+    flagged = ['Em', 'Pe', 'gam']
 
     return eclip+flagged
 
-def make_true_label_txt(data_dir, sector):
+def make_true_label_txt(data_dir, sector, rmv_flagged=True):
     '''Combine Sector*_simbad.txt, Sector*_GCVS.txt, and Sector*_asassn.txt
     TODO: edit to handle 30-min cadence, etc.'''
     prefix = data_dir+'databases/Sector'+str(sector)+'_'
     ticid = np.loadtxt(data_dir+'Sector'+str(sector)+'/all_targets_S%03d'%sector\
                        +'_v1.txt')[:,0]
-    otypes = {key: [] for key in ticid} # >> initialize
+    otypes = {key: np.empty(0) for key in ticid} # >> initialize
 
-    otypes = read_otype_txt(otypes, prefix+'gcvs.txt', data_dir)
-    otypes = read_otype_txt(otypes, prefix+'asassn.txt', data_dir)
-    otypes = read_otype_txt(otypes, prefix+'simbad.txt', data_dir, simbad=True)
+    otypes = read_otype_txt(otypes, prefix+'gcvs.txt', data_dir,
+                            rmv_flagged=rmv_flagged)
+    otypes = read_otype_txt(otypes, prefix+'asassn.txt', data_dir, 'asassn',
+                            rmv_flagged=rmv_flagged)
+    otypes = read_otype_txt(otypes, prefix+'simbad.txt', data_dir, 'simbad',
+                            rmv_flagged=rmv_flagged)
 
 
-    pdb.set_trace()
+    # pdb.set_trace()
     # >> save to text file
     out = prefix+'true_labels.txt'
     with open(out, 'w') as f:
+        f.write('### Variabiltiy classifications for stars observed with'+\
+                '2-min cadence during Sector '+str(sector)+' ###\n')
+        f.write('### TICID, var_type  ###\n')
         for i in range(len(ticid)):
             # >> merge classes
             otype = merge_otype(otypes[ticid[i]])
             otype = '|'.join(otype)
             f.write(str(int(ticid[i]))+','+otype+'\n')    
             
-def read_otype_txt(otypes, otype_txt, data_dir, simbad=False, add_chars=['+', '/'],
-                   uncertainty_flags=[':', '?', '*']):
+def read_otype_txt(otypes, otype_txt, data_dir, catalog=None, add_chars=['+', '/'],
+                   uncertainty_flags=[':', '?', '*'], rmv_flagged=True):
 
-    rmv_classes = make_remove_class_list(simbad=simbad)
+    '''
+    Args:
+    * catalog: either NONE, 'simbad', 'asassn'
+    '''
+    rmv_classes = make_remove_class_list(catalog=catalog, rmv_flagged=rmv_flagged)
 
-    if simbad:
-        with open(data_dir+'simbad_gcvs_label.txt', 'r') as f:
+    otype_dict = {}
+    if type(catalog) != type(None):
+        with open('./docs/var_'+catalog+'.txt', 'r') as f:
             lines = f.readlines()
         otype_dict = {}
-        for line in lines:
-            otype, otype_gcvs = line.split(' = ')
+        for line in lines[1:]:
+            otype, otype_gcvs = line.split(',')
             otype_gcvs = otype_gcvs.replace('\n', '')
             otype_dict[otype] = otype_gcvs
 
@@ -709,78 +706,29 @@ def read_otype_txt(otypes, otype_txt, data_dir, simbad=False, add_chars=['+', '/
                 if o == 'UGSU':
                     stop=True
                 if len(o) > 0 and o != '**':
-                    # >> remove uncertainty flags
-                    if o[-1] in uncertainty_flags:
-                        o = o[:-1]
-                    if '(' in o: # >> remove (B) flag
-                        o = o[:o.index('(')]
-
-                    # >> convert to GCVS nomenclature
-                    if simbad and o in list(otype_dict.keys()): 
-                        o = otype_dict[o]
-
-                    # >> remove classes that require external information
-                    if o in rmv_classes:
+                    # >> remove stars that aren't classified
+                    if o[0] == 'V':
                         o = ''
+
+                    else:
+                        # >> remove uncertainty flags
+                        if o[-1] in uncertainty_flags:
+                            o = o[:-1]
+
+                        # >> convert to GCVS nomenclature
+                        if o in list(otype_dict.keys()): 
+                            o = otype_dict[o]
+
+                        # >> remove classes that require external information
+                        if o in rmv_classes:
+                            o = ''
                     otype_list_new.append(o)
 
-            otypes[float(tic)] = np.unique(otype_list_new)
+            otypes[float(tic)] = np.append(otypes[float(tic)], np.unique(otype_list_new))
 
     return otypes
 
 
-
-
-
-def correct_simbad_to_vizier(in_f='./SectorX_simbad.txt',
-                             out_f='./SectorX_simbad_revised.txt',
-                             simbad_gcvs_conversion='./simbad_gcvs_label.txt',
-                             uncertainty_flags=[':', '?', '*']):
-    '''TODO: Clean up args.'''
-    
-    with open(simbad_gcvs_conversion, 'r') as f:
-        lines = f.readlines()
-    renamed = {}
-    for line in lines:
-        otype, description = line.split(' = ')
-        
-        # >> remove new line character
-        description = description.replace('\n', '')
-        
-        renamed[otype] = description    
-    
-    with open(in_f, 'r') as f:
-        lines = f.readlines()
-        
-        
-    for line in lines:
-        tic, otype, main = line.split(',')
-        otype = otype.replace('+', '|')
-        otype_list = otype.split('|')
-        otype_list_new = []
-        
-        for o in otype_list:
-            
-            if len(o) > 0:
-                # >> remove uncertainty_flags
-                if o[-1] in uncertainty_flags:
-                    o = o[:-1]
-                    
-                # >> remove (B)
-                if '(' in o:
-                    o = o[:o.index('(')]
-                    
-                if o in list(renamed.keys()):
-                    o = renamed[o]
-                
-            otype_list_new.append(o)
-                
-                
-        otype = '|'.join(otype_list_new)
-        
-        
-        with open(out_f, 'a') as f:
-            f.write(','.join([tic, otype, main]))
 
 def quick_simbad(ticidasstring):
     """ only returns if it has a tyc id"""
@@ -797,7 +745,7 @@ def quick_simbad(ticidasstring):
 
 
 
-def get_true_classifications(ticid=[], data_dir='./', sector='all'):
+def get_true_var_types(ticid=[], data_dir='./', sector='all'):
     '''Reads Sector*_true_labels.txt, generated from make_true_label_txt()
     * 
     * sector: either 'all' or int'''
@@ -812,7 +760,8 @@ def get_true_classifications(ticid=[], data_dir='./', sector='all'):
         fnames = ['Sector'+str(sector)+'_true_labels.txt']
     
     for fname in fnames:
-        data = np.loadtxt(database_dir+fname, delimiter=',', dtype='str')
+        data = np.loadtxt(database_dir+fname, delimiter=',', dtype='str',
+                          skiprows=2)
         ticid_true.extend(data[:,0].astype('float'))
         otypes.extend(data[:,1])
 
@@ -822,7 +771,7 @@ def get_true_classifications(ticid=[], data_dir='./', sector='all'):
         ticid_true = np.array(ticid_true)[inds]
         otypes = np.array(otypes)[inds]
     
-    return ticid_true, otypes
+    return np.array(ticid_true), np.array(otypes)
 
 
 
