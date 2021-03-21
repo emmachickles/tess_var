@@ -641,23 +641,20 @@ def make_flagged_class_list():
 
     return eclip+flagged
 
-def make_true_label_txt(data_dir, sector, rmv_flagged=True):
-    '''Combine Sector*_simbad.txt, Sector*_GCVS.txt, and Sector*_asassn.txt
-    TODO: edit to handle 30-min cadence, etc.'''
+def make_true_label_txt(data_dir, sector, rmv_flagged=True,
+                        catalogs=[gcvs, simbad, asassn]):
+    '''Combine Sector*_simbad.txt, Sector*_gcvs.txt, and Sector*_asassn.txt
+    TODO: edit to handle 30-min cadence, etc.
+    TODO: better description of this function'''
     prefix = data_dir+'databases/Sector'+str(sector)+'_'
     ticid = np.loadtxt(data_dir+'Sector'+str(sector)+'/all_targets_S%03d'%sector\
                        +'_v1.txt')[:,0]
     otypes = {key: np.empty(0) for key in ticid} # >> initialize
 
-    otypes = read_otype_txt(otypes, prefix+'gcvs.txt', data_dir,
-                            rmv_flagged=rmv_flagged)
-    otypes = read_otype_txt(otypes, prefix+'asassn.txt', data_dir, 'asassn',
-                            rmv_flagged=rmv_flagged)
-    otypes = read_otype_txt(otypes, prefix+'simbad.txt', data_dir, 'simbad',
-                            rmv_flagged=rmv_flagged)
+    for catalog in catalogs:
+        otypes = read_otype_txt(otypes, prefix+catalog+'.txt', data_dir, catalog,
+                                rmv_flagged=rmv_flagged)
 
-
-    # pdb.set_trace()
     # >> save to text file
     out = prefix+'true_labels.txt'
     with open(out, 'w') as f:
@@ -680,7 +677,7 @@ def read_otype_txt(otypes, otype_txt, data_dir, catalog=None, add_chars=['+', '/
     rmv_classes = make_remove_class_list(catalog=catalog, rmv_flagged=rmv_flagged)
 
     otype_dict = {}
-    if type(catalog) != type(None):
+    if type(catalog) != type(None) and catalog not 'gcvs':
         with open('./docs/var_'+catalog+'.txt', 'r') as f:
             lines = f.readlines()
         otype_dict = {}
