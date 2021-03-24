@@ -9,8 +9,8 @@ import feat_eng as fe
 data_dir = '/nfs/blender/data/tdaylan/data/'
 output_dir = '../'
 sector=1
-n_freq=[100000, 500000, 1000000]
-n_terms=[1,2,3]
+n_freq=[1000, 5000]
+n_terms=[2]
 targ = [25078924, 31655792, 260162199, 144194304]
 
 flux, time, ticid, target_info = \
