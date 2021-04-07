@@ -7,9 +7,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import pdb # >> debug helper
-import os
+# import os
 
 import sys
-sys.path.insert(0, '../mergen/mergen/')
-import mergen
+sys.path.insert(0, '../mergen/')
+import mergen.mergen as mg
 
