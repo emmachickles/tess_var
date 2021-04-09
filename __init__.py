@@ -10,6 +10,5 @@ import pdb # >> debug helper
 # import os
 
 import sys
-sys.path.insert(0, '../mergen/')
-import mergen.mergen as mg
+from mergen.mergen import mergen
 
