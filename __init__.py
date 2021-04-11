@@ -10,5 +10,5 @@ import pdb # >> debug helper
 # import os
 
 import sys
-from mergen.mergen import mergen
+from mergen.mergen import mergen as mg
 

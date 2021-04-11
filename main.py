@@ -9,5 +9,5 @@ savepath = '/nfs/blender/data/tdaylan/data/'
 datatype = 'SPOC'
 mdumpcsv = datapath + 'Table_of_momentum_dumps.csv'
 
-obj = mergen(datapath, savepath, datatype, mdumpcsv)
+obj = mg.mergen(datapath, savepath, datatype, mdumpcsv)
 
