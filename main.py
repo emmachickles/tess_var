@@ -19,6 +19,7 @@ obj = mg.mergen(datapath, savepath, datatype, mdumpcsv, sector=sector)
 obj.load_lightcurves_local()
 
 targ = [25078924, 31655792, 260162199, 144194304]
+# targ = [31655792, 260162199, 144194304]
 for t in targ:
     ind = np.nonzero(obj.ticid==t)
     y = obj.intensities[ind][0]
@@ -28,6 +29,7 @@ for t in targ:
                         prefix=prefix, plot=True, n_freq=n_freq,
                         n_terms=n_terms, n_bins=n_bins)
 
+pdb.set_trace()
 fe.create_phase_curve_feats(obj.times, obj.intensities, sector=obj.sector,
                             output_dir=obj.savepath, n_freq=n_freq,
                             n_terms=n_terms, n_bins=n_bins)
