@@ -33,14 +33,15 @@ def create_phase_curve_feats(time, flux, n_bins=100, n_freq=500000,
 
 def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
                      har_window=100, kernel_size=25,
-                     plot=False, output_dir='', prefix='', report_time=False,
-                     n_freq0=10000, frac=20):
+                     plot=False, output_dir='', prefix='', report_time=True,
+                     n_freq0=10000, frac=20, frac_max=1e-3,
+                     tmin=0.05, tmax=27, tmax0=5):
 
     # >> temporal baseline is 27 days, and shortest timescale sensitive to is
     # >> 4 minutes
-    tmax = 27 # days
+    #tmax = 27 # days
     # tmin = 4./1440 # days
-    tmin = 0.025
+    #tmin = 0.025
 
     from astropy.timeseries import LombScargle
     from astropy.timeseries import TimeSeries
@@ -53,7 +54,7 @@ def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
 
     # -- check whether to do phase curve ---------------------------------------
     # >> first use sparse freq grid
-    frequency = np.linspace(1./tmax, 1./tmin, n_freq0)
+    frequency = np.linspace(1./tmax0, 1./tmin, n_freq0)
     power = LombScargle(t, y, nterms=n_terms).power(frequency)    
 
     max_pow = np.max(power)
@@ -92,7 +93,7 @@ def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
     from scipy.signal import medfilt
     smoothed_power = medfilt(power, kernel_size=kernel_size)
     # no_peak_inds = np.nonzero((power-1e-3*np.max(power))<0)[0]
-    no_peak_inds = np.nonzero((smoothed_power-1e-3*np.max(smoothed_power))<0)[0]
+    no_peak_inds = np.nonzero((smoothed_power-frac_max*np.max(smoothed_power))<0)[0]
     sorted_inds = no_peak_inds[np.argsort(np.abs(no_peak_inds - max_ind))]
     if max_ind < np.min(sorted_inds):
         left_ind = 0
@@ -101,43 +102,48 @@ def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
     if max_ind > np.max(sorted_inds):
         right_ind = len(power)-1
     else:
-        right_ind = sorted_inds[np.nonzero(sorted_inds > max_ind)[0][0]]
+         right_ind = sorted_inds[np.nonzero(sorted_inds > max_ind)[0][0]]
     window = np.arange(left_ind, right_ind)
     windows.append(window)
     inds = np.append(inds, window)
+    # inds = np.append(inds, np.arange(0, np.argmin(frequency-mask_freq)))
     
     if plot:
         fig, ax = plt.subplots(2, figsize=(8, 2*3))
-        if report_time:
-            ax[0].set_title('Sparse frequency grid (nfreq0='+str(n_freq0)+')') 
+        ax[0].set_title('Sparse frequency grid (nfreq0='+str(n_freq0)+')') 
         ax[0].plot(t, y, '.k', ms=1)
         ax[0].set_xlabel('Time [BJD - 2457000]')
         ax[0].set_ylabel('Relative Flux')
         ax[1].plot(frequency, power, '.k', ms=1)
-        ax[1].set_xlabel('Frequency')
+        ax[1].set_xlabel('Frequency [1/days]')
         ax[1].set_ylabel('Power')
-    
-        # >> plot harmonics
-        for window in windows[:-1]:
-            ax[1].axvspan(frequency[window[0]], frequency[window[-1]], alpha=0.2)
-        
-        # >> plot max peak
-        window = windows[-1] 
-        ax[1].axvspan(frequency[window[0]], frequency[window[-1]], alpha=0.2,
-                      facecolor='m')
 
-        # >> second largest component
+        # >> add second largest component to plotted windows
         inds = inds.astype('int')
-        freq2 = np.delete(frequency, inds)[np.argmax(np.delete(power, inds))]
+        comp_ind = np.argmax(np.delete(power, inds))
+        freq2 = np.delete(frequency, inds)[comp_ind]
         freq2_ind = np.argmin(np.abs(frequency - freq2))
         window = np.arange(np.max([0,har_ind-har_window]),
                            np.min([har_ind+har_window, len(frequency)]),
                            dtype='int')
-
-        ax[1].axvspan(frequency[np.max([0,freq2_ind-har_window])],
-                      frequency[np.min([freq2_ind+har_window, len(frequency)-1])],
-                      alpha=0.2, facecolor='r')        
-
+        windows.append(window)
+    
+        # >> plot harmonics
+        for i in range(len(windows)):
+            window = windows[i]
+            if i == len(windows)-2: # >> maximum peak
+                c='m'
+            elif i == len(windows)-1:
+                c='r'
+            else: # >> harmonics
+                c='b'
+            ax[1].axvspan(frequency[window[0]], frequency[window[-1]],
+                          alpha=0.2, facecolor=c)
+            freq = frequency[window[len(window)//2]]
+            ax[1].axvline(freq, alpha=0.4, c=c)
+            ax[1].text(freq, 0.85*np.max(power),str(np.round(1/freq,3))+'\ndays',
+                       fontsize='small')
+        
         fig.tight_layout()
         fig.savefig(output_dir+prefix+'sparse_pgram.png')
         print('Saved '+output_dir+prefix+'sparse_pgram.png')
