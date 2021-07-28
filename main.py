@@ -17,7 +17,9 @@ n_freq0  = 10000
 n_terms  = 2
 n_bins   = 100
 kernel_size = 15
-frac_max = 1e-2
+thresh_min = 1e-2
+report_time = True
+
 
 obj = mg.mergen(datapath, savepath, datatype, mdumpcsv, sector=sector)
 obj.load_lightcurves_local()
@@ -28,22 +30,28 @@ obj.load_lightcurves_local()
 # targ = [260162199, 144194304]
 
 # >> non-periodic
-targ = [24695725, 25132999, 25133286, 25299762, 25300088, 29285387]
-# for t in targ:
-#     ind = np.nonzero(obj.ticid==t)
-#     y = obj.intensities[ind][0]
-#     prefix = 'TIC'+str(t)
+# targ = [24695725, 25132999, 25133286, 25299762, 25300088, 29285387]
 
-#     res = fe.mask_harmonics(obj.times, y, n_freq=n_freq0,
-#                          report_time=True, plot=True, output_dir=output_dir,
-#                             prefix='TIC'+str(t))
+# >> all
+targ = obj.ticid
+results = []
 
-#     if res:
-#         feats = fe.calc_phase_curve(obj.times, y, n_bins=n_bins, n_freq=n_freq,
-#                                     n_terms=n_terms, report_time=True, plot=True,
-#                                     output_dir=output_dir, prefix='TIC'+str(t))
+for t in targ:
+    ind = np.nonzero(obj.ticid==t)
+    y = obj.intensities[ind][0]
+    prefix = 'TIC'+str(t)
 
-# pdb.set_trace()
+    res = fe.mask_harmonics(obj.times, y, n_freq=n_freq0,
+                         report_time=True, plot=False, output_dir=output_dir,
+                            prefix='TIC'+str(t), thresh_min=thresh_min)
+    results.append(res)
+
+    # if res:
+    #     feats = fe.calc_phase_curve(obj.times, y, n_bins=n_bins, n_freq=n_freq,
+    #                                 n_terms=n_terms, report_time=True, plot=True,
+    #                                 output_dir=output_dir, prefix='TIC'+str(t))
+
+pdb.set_trace()
 fe.create_phase_curve_feats(obj.times, obj.intensities, obj.ticid,
                             sector=obj.sector,
                             output_dir=obj.savepath, n_freq=n_freq,
