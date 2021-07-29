@@ -10,5 +10,7 @@ import pdb # >> debug helper
 # import os
 
 import sys
-from mergen.mergen import mergen as mg
+from mergen import mergen
+from mergen.mergen import learn_utils as lt
+from mergen.mergen import plot_utils as pt
 

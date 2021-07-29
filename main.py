@@ -23,6 +23,7 @@ report_time = True
 
 obj = mg.mergen(datapath, savepath, datatype, mdumpcsv, sector=sector)
 obj.load_lightcurves_local()
+pdb.set_trace()
 
 # targ = [25078924, 31655792, 260162199, 144194304]
 # targ = [31655792,32200310,53842685,117515123,126637765,141268467,141606986,144194304,147083089,161262226,200645730,200655763,206537272,206555954,211412634,231629787,235000060,238170857,259901124,260162199,261089147,261259291,263078276,267043786,279955276,294273900,348717439,355544723,369218857,412063998, 419635446, 441105436]
@@ -57,4 +58,3 @@ fe.create_phase_curve_feats(obj.times, obj.intensities, obj.ticid,
                             output_dir=obj.savepath, n_freq=n_freq,
                             n_terms=n_terms, n_bins=n_bins,
                             n_freq0=n_freq0)
-
