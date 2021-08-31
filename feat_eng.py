@@ -25,6 +25,10 @@ def create_phase_curve_feats(time, flux, ids, n_bins=100, n_freq=500000,
     all_feats = []
     # >> calculate phase curves
     for i in range(len(flux)):
+
+        if report_time: # >> restart timer
+            start = datetime.now()
+
         # >> check if light curve is periodic
         res = mask_harmonics(time, flux[i], n_freq=n_freq0, n_terms=n_terms0,
                              report_time=report_time, plot=plot, output_dir=output_dir,
@@ -33,17 +37,25 @@ def create_phase_curve_feats(time, flux, ids, n_bins=100, n_freq=500000,
         feats = calc_phase_curve(time, flux[i], n_bins=n_bins, n_freq=n_freq,
                                  n_terms=n_terms, report_time=report_time, plot=plot,
                                  output_dir=output_dir, prefix='TIC'+str(ids[i]))
+
         with open(fname, 'a') as f:
             f.write(str(ids[i])+','+str(type(feats)==type(None)))
         if not type(feats) == type(None):
             all_feats.append(feats)
 
-    feats = dt.standardize(feats)
+        if report_time:
+            end = datetime.now()
+            dur_sec = (end-start).total_seconds()
+            print('Time to make phase curve: '+str(dur_sec))
+
+
+    # feats = dt.standardize(feats, ax=0)
+    all_feats = dt.standardize(all_feats, ax=0)
     np.savetxt(output_dir+'Sector'+str(sector)+'_phase_curve_feat.txt',
-               np.array(feats))
+               np.array(all_feats))
 
 def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e-2,
-                   tmin=0.05, tmax=5, har_window=100, kernel_size=25,
+                   tmin=0.05, tmax=2, har_window=100, kernel_size=25,
                    report_time=True, plot=True, output_dir='', prefix=''):
     ''' Mask harmonics of the largest power to determine whether it is
     appropriate to compute phase curve features. Should take ~1 ms for short-
@@ -90,6 +102,7 @@ def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e
 
     # >> frequency inds corresponding to harmonics
     inds = np.array([i for wind in windows for i in wind]).astype('int')
+    inds = np.unique(inds)
 
     # -- mask maximum peak -----------------------------------------------------
     # >> find width of maximum peak
@@ -159,11 +172,36 @@ def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e
 
     # -- return result ---------------------------------------------------------
     
-    if np.max(np.delete(power, inds)) > max_pow/thresh_max:
+    if np.max(np.delete(power, inds)) > max_pow*thresh_max:
         print('Not making phase curve...')
         return False
     else:
         return True
+
+def find_periodic_obj(ticid, targets, flux, time, sector, output_dir,
+                      n_freq0=10000, report_time=False, plot=False,
+                      thresh_min=1e-2):
+
+    results = []
+    # >> first find all the periodic objects
+    fname = output_dir+'Sector'+str(sector)+'_periodic.txt'
+    with open(fname, 'w') as f:
+        f.write('TICID,PERIODIC\n')
+        for t in targets:
+            ind = np.nonzero(ticid==t)
+            y = flux[ind][0]
+            prefix = 'TIC'+str(t)
+
+            res = mask_harmonics(time, flux[ind][0], n_freq=n_freq0,
+                                 report_time=report_time, plot=plot,
+                                 output_dir=output_dir, prefix='TIC'+str(t),
+                                 thresh_min=thresh_min)
+            f.write(str(t)+','+str(res)+'\n')
+            results.append(res)
+            print('TIC'+str(t)+' '+str(res))
+    inds = np.nonzero(np.array(results))
+    return targets[inds]
+
 
 
 def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
@@ -185,7 +223,6 @@ def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
     import astropy.units as u
 
     if report_time: # >> restart timer
-        from datetime import datetime
         start = datetime.now()
 
     # -- compute periodogram ---------------------------------------------------

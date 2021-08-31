@@ -6,11 +6,11 @@ from __init__ import *
 
 import feat_eng as fe
 
+# -- inputs --------------------------------------------------------------------
 datapath = '/nfs/blender/data/tdaylan/data/'
 savepath = '/nfs/blender/data/tdaylan/Mergen_Run_2/'
-output_dir='/nfs/ger/home/echickle/'
+output_dir='./'
 datatype = 'SPOC'
-mdumpcsv = datapath + 'Table_of_momentum_dumps.csv'
 sector   = 1
 n_freq   = 50000
 n_freq0  = 10000
@@ -18,43 +18,44 @@ n_terms  = 2
 n_bins   = 100
 kernel_size = 15
 thresh_min = 1e-2
+plot = True
 report_time = True
 
+# -- initialize Mergen object --------------------------------------------------
+mg = mergen.mergen(datapath, savepath, datatype, sector=sector)
+mg.load_lightcurves_local()
+mg.load_true_otypes()
+mg.numerize_true_otypes()
 
-obj = mg.mergen(datapath, savepath, datatype, mdumpcsv, sector=sector)
-obj.load_lightcurves_local()
-pdb.set_trace()
-
+# >> periodic examples
 # targ = [25078924, 31655792, 260162199, 144194304]
 # targ = [31655792,32200310,53842685,117515123,126637765,141268467,141606986,144194304,147083089,161262226,200645730,200655763,206537272,206555954,211412634,231629787,235000060,238170857,259901124,260162199,261089147,261259291,263078276,267043786,279955276,294273900,348717439,355544723,369218857,412063998, 419635446, 441105436]
 # targ = [141268467]
 # targ = [260162199, 144194304]
 
-# >> non-periodic
-# targ = [24695725, 25132999, 25133286, 25299762, 25300088, 29285387]
+# >> non-periodic examples
+targ = [24695725, 25132999, 25133286, 25299762, 25300088, 29285387]
 
 # >> all
-targ = obj.ticid
-results = []
+# targ = mg.ticid
 
-for t in targ:
-    ind = np.nonzero(obj.ticid==t)
-    y = obj.intensities[ind][0]
-    prefix = 'TIC'+str(t)
+targ = np.array(targ).astype('int')
 
-    res = fe.mask_harmonics(obj.times, y, n_freq=n_freq0,
-                         report_time=True, plot=False, output_dir=output_dir,
-                            prefix='TIC'+str(t), thresh_min=thresh_min)
-    results.append(res)
+# -- find periodic objects -----------------------------------------------------
 
-    # if res:
-    #     feats = fe.calc_phase_curve(obj.times, y, n_bins=n_bins, n_freq=n_freq,
-    #                                 n_terms=n_terms, report_time=True, plot=True,
-    #                                 output_dir=output_dir, prefix='TIC'+str(t))
+ticid_periodic = fe.find_periodic_obj(mg.ticid, targ, mg.intensities, mg.times,
+                                      mg.sector, output_dir, n_freq0=n_freq0,
+                                      report_time=report_time, plot=plot,
+                                      thresh_min=thresh_min)
 
-pdb.set_trace()
-fe.create_phase_curve_feats(obj.times, obj.intensities, obj.ticid,
-                            sector=obj.sector,
-                            output_dir=obj.savepath, n_freq=n_freq,
+# -- make phase curve features -------------------------------------------------
+
+_, srtinds, _ = np.intersect1d(mg.ticid, ticid_periodic, return_indices=True)
+flux_periodic = mg.intensities[srtinds]
+tic_periodic = mg.ticid[srtinds]
+
+fe.create_phase_curve_feats(mg.times, flux_periodic, tic_periodic,
+                            sector=mg.sector, plot=plot,
+                            output_dir=output_dir, n_freq=n_freq,
                             n_terms=n_terms, n_bins=n_bins,
-                            n_freq0=n_freq0)
+                            n_freq0=n_freq0, report_time=report_time)
