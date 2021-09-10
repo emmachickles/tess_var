@@ -9,11 +9,11 @@ Script to train a deep autoencoder on LS periodograms.
 from __init__ import *
 
 # -- inputs --------------------------------------------------------------------
-datapath     = '/Users/emma/Documents/MIT/TESS/Data/'
-# datapath     = '/nfs/blender/data/tdaylan/data/'
+# datapath     = '/Users/emma/Documents/MIT/TESS/Data/'
+datapath     = '/nfs/blender/data/tdaylan/data/'
 
-savepath     = '/Users/emma/Documents/MIT/TESS/Plots/Ensemble-Sector_1/DAE/'
-# savepath     = '/nfs/blender/data/tdaylan/Mergen_Run_2/'
+# savepath     = '/Users/emma/Documents/MIT/TESS/Plots/Ensemble-Sector_1/DAE/'
+savepath     = '/nfs/blender/data/tdaylan/Mergen_Run_2/'
 
 parampath    = datapath + 'daehyperparams.txt'
 datatype     = 'SPOC'
@@ -24,5 +24,14 @@ sector       = 1
 mg = mergen.mergen(datapath, savepath, datatype, sector=sector,
                    parampath=parampath)
 
-mg.load_features(featgen)
-mg.run_feature_analysis(featgen)
+mg.load_lightcurves_local()
+mg.preprocess_data(featgen)
+
+# mg.load_features(featgen)
+# mg.run_feature_analysis(featgen)
+
+mg.load(featgen)
+
+# mg.run_vis(featgen)
+mg.produce_ae_visualizations(featgen)
+
