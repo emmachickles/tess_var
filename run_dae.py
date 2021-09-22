@@ -32,6 +32,8 @@ mg.preprocess_data(featgen)
 
 mg.load(featgen)
 
+mg.produce_novelty_visualizations(featgen)
+
 # mg.run_vis(featgen)
-mg.produce_ae_visualizations(featgen)
+# mg.produce_ae_visualizations(featgen)
 
