@@ -16,3 +16,6 @@ from mergen.mergen import learn_utils as lt
 from mergen.mergen import plot_utils  as pt
 from mergen.mergen import data_utils  as dt
 
+import ephesus.ephesus.util as ephesus
+
+

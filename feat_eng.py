@@ -5,12 +5,237 @@
 # 
 # -- existing functions --------------------------------------------------------
 # 
+# -- Preprocessing --
+# * clean_sector
+#   * clean_sector_diag
+#   * sigma_clip
+# 
+# -- Feature Generation --
+# LS Periodograms
+#   * compute_ls_pgram_sector
+#     * compute_ls_pgram
+# Phase Curve Features
+#   * create_phase_curve_feats
+#     * mask_harmonics
+#     * find_periodic_obj
+#     * calc_phase_curve
+# 
 # -- TODO ----------------------------------------------------------------------
 # 
 # ==============================================================================
-# ==============================================================================
 
 from __init__ import *
+from scipy.stats import sigmaclip
+from astropy.timeseries import LombScargle
+
+
+# ==============================================================================
+# ==============================================================================
+# == Preprocessing =============================================================
+# ==============================================================================
+# ==============================================================================
+
+# >> Sigma clipping
+def sigma_clip_sector(mg, plot=True, plot_int=200, n_sigma=5):
+
+    # >> get list of light curves names
+    mask_sector_path = mg.datapath + 'mask/sector-%02d'%mg.sector+'/'
+    lcfile_list = os.listdir(mask_sector_path)
+
+    # >> create relevant directories
+    clip_sector_path = mg.datapath + 'clip/sector-%02d'%mg.sector+'/'
+    dt.create_dir(clip_sector_path)
+    savepath = mg.ensbpath + 'clip/'
+    dt.create_dir(savepath) 
+
+    # >> loop through each light curve and sigma clip
+    for i in range(len(lcfile_list)):
+        lcfile = lcfile_list[i]
+        if i % plot_int == 0:
+            verbose=True
+            verbose_msg='Sigma clipping light curve '+str(i)+'/'+\
+                        str(len(lcfile_list))
+            if plot: plot_pgram = True
+        else:
+            plot_pgram, verbose = False, False
+
+
+        # >> sigma clip light curve
+        sigma_clip_lc(mg.datapath, lcfile, mg.sector, 
+                      mdumpcsv=mg.mdumpcsv, plot=plot, n_sigma=n_sigma,
+                      savepath=savepath)
+
+    if plot:
+        clean_sector_diag(mask_sector_path, savepath, sector, mdumpcsv)
+
+
+def sigma_clip_lc(mg,  n_sigma=5, plot=False, max_iter=5,
+                  timescalbdtrspln=0.5/24.):
+
+    mask_sector_path = mg.datapath + 'mask/sector-%02d'%mg.sector+'/'
+    clip_sector_path = mg.datapath + 'clip/sector-%02d'%mg.sector+'/'
+    savepath = mg.ensbpath + 'clip/'
+
+    # >> load light curve
+    time, flux, meta = dt.open_fits(mask_sector_path, fname=lcfile)
+
+    # >> initialize variables 
+    n_clip = 1 # >> number of data points clipped in an iteration
+    n_iter = 0 # >> number of iterations
+    flux_clip = np.copy(flux) # >> initialize sigma-clipped flux
+
+    if plot:
+        pt.plot_lc(time, flux, mask_sector_path+lcfile, prefix='sigmaclip_',
+                   suffix='_niter0', mdumpcsv=mg.mdumpcsv, output_dir=savepath)
+
+    while n_clip > 0:
+
+        n_iter += 1
+
+        # >> temporarily remove NaNs
+        num_indx = np.nonzero(~np.isnan(flux_clip))
+        flux_num = flux_clip[num_indx]
+
+        # >> trial detrending
+        # flux_dtrn = detrend(flux_num)
+        flux_dtrn, _, _, _, _ = \
+            ephesus.bdtr_tser(time[num_indx], flux_num,
+                              timescalbdtrspln=timescalbdtrspln)
+        flux_dtrn = np.concatenate(flux_dtrn)
+
+        # >> sigma-clip light curve
+        clipped, lower, upper = sigmaclip(flux_dtrn, low=n_sigma,
+                                          high=n_sigma)
+        
+        # >> data points that are beyond threshold
+        clip_indx = np.nonzero((flux_dtrn > upper) + (flux_dtrn < lower))[0]
+
+        # >> apply sigma-clip mask
+        flux_clip[num_indx[0][clip_indx]] = np.nan
+
+        # >> plot the sigma-clipped time-series data
+        if plot:
+            prefix='sigmaclip_'
+            suffix='_niter'+str(n_iter)+'_dtrn'
+            pt.plot_lc(time[num_indx], flux_dtrn, mask_sector_path+lcfile,
+                       prefix=prefix, suffix=suffix, mdumpcsv=mg.mdumpcsv,
+                       output_dir=savepath)
+
+            prefix='sigmaclip_'
+            suffix='_niter'+str(n_iter)
+            pt.plot_lc(time, flux_clip, mask_sector_path+lcfile, prefix=prefix,
+                       mdumpcsv=mg.mdumpcsv, suffix=suffix, output_dir=savepath)
+
+        # >> break loop if no data points are clipped
+        n_clip = clip_indx.size
+        print('Iteration number: '+str(n_iter)+', Num clipped points: '+\
+              str(n_clip))
+
+        # >> break loop if number of iterations exceeds limit
+        if n_iter == 5:
+            break
+
+    # >> save number of clipped data points
+    num_clip = np.count_nonzero(np.isnan(flux_clip)) - \
+               np.count_nonzero(np.isnan(flux))
+    table_meta = [('NUM_CLIP', num_clip)]
+    ticid = meta['TICID']
+
+    # >> save light curve in Fits file
+    dt.write_fits(clip_sector_path, meta, ticid, [time, flux_clip],
+                  ['TIME', 'FLUX'], table_meta=table_meta)
+
+def sigma_clip_sector_diag(maskpath, savepath, sector, mdumpcsv, bins=40):
+    '''Produces text file with TICIDs ranked by the number of data points masked
+    during sigma clipping, and a histogram of those numbers.'''
+
+    ticid = np.empty(0)
+    num_clip = np.empty(0)
+    for lcfile in os.listdir(maskpath):
+        lchdu = fits.open(maskpath+lcfile)
+        ticid = np.append(ticid, lchdu[0].header['TICID'])
+        num_clip = np.append(num_clip, lchdu[1].header['NUM_CLIP'])
+
+    fig, ax = plt.subplots(figsize=(5,5))
+    ax.hist(num_clip, bins=bins)
+    ax.set_xlabel('Number of data points sigma-clipped')
+    ax.set_ylabel('Number of targets')
+    ax.set_title('Sector '+str(sector)+' Sigma Clipping')
+    fname = savepath+'Sector'+str(sector)+'_sigmaclip_hist.png'
+    fig.tight_layout()
+    fig.savefig(fname)
+    print('Saved '+fname)
+
+    sort_indx = np.argsort(num_clip)[::-1]
+    df = pd.DataFrame({'TICID': ticid[sort_indx],
+                       'NUM_CLIP': num_clip[sort_indx]})
+    fname = savepath+'Sector'+str(sector)+'_sigmaclip.txt'
+    df.to_csv(fname, index=False, sep='\t')
+    print('Saved '+fname)
+
+
+
+# ==============================================================================
+# ==============================================================================
+# == Feature Engineering =======================================================
+# ==============================================================================
+# ==============================================================================
+
+# -- LS Periodograms -----------------------------------------------------------
+
+def compute_ls_pgram_sector(mg, plot=True, plot_int=200):
+    """
+    * mg : Mergen object """
+
+    mask_sector_path = mg.datapath + 'mask/sector-%02d'%mg.sector+'/'
+    lspm_sector_path = mg.datapath + 'lspm/sector-%02d'%mg.sector+'/'
+    dt.create_dir(lspm_sector_path)
+    lcfile_list = os.listdir(mask_sector_path)
+
+    savepath = mg.ensbpath + 'lspm/'
+    dt.create_dir(savepath)
+
+    for i in range(len(lcfile_list)):
+        if i % plot_int == 0:
+            print('Computing LS periodogram of light curve '+str(i)+'/'+\
+                  str(len(lcfile_list)))
+            if plot: plot_pgram = True
+        else:
+            plot_pgram = False
+        compute_ls_pgram(mg, lcfile_list[i], plot=plot_pgram)
+
+def compute_ls_pgram(mg, lcfile, plot=False):
+
+    mask_sector_path = mg.datapath + 'mask/sector-%02d'%mg.sector+'/'
+    lspm_sector_path = mg.datapath + 'lspm/sector-%02d'%mg.sector+'/'
+    savepath = mg.ensbpath + 'lspm/'
+
+    # >> open light curve file
+    time, flux, meta = dt.open_fits(mask_sector_path, fname=lcfile)
+    ticid = meta['TICID']
+
+    num_inds = np.nonzero(~np.isnan(flux))
+    freq, power = LombScargle(time[num_inds], flux[num_inds]).autopower()
+
+    # >> save periodogram
+    dt.write_fits(lspm_sector_path, meta, ticid, [freq, power], ['FREQ', 'LPSM'])
+
+    if plot:
+        fig, ax = plt.subplots(2)
+        ax[0].plot(time, flux, '.k', markersize=2)
+        ax[1].plot(freq, power)
+        ax[0].set_xlabel('Time [BJD - 2457000]')
+        ax[0].set_ylabel('Relative flux')
+        ax[1].set_xlabel('Frequency (days -1)')
+        ax[1].set_ylabel('LS Periodogram')
+        # ax[i, 1].set_xscale('log')
+        ax[1].set_yscale('log')
+        fig.tight_layout()
+        fname = savepath+'lspgram_TIC'+str(int(ticid))+'.png'
+        fig.savefig(fname)
+        print('Saved '+fname)
+
+# -- Phase Curve Features ------------------------------------------------------
 
 def create_phase_curve_feats(time, flux, ids, n_bins=100, n_freq=500000, 
                              n_terms=1, n_freq0=10000, n_terms0=1,
@@ -34,6 +259,7 @@ def create_phase_curve_feats(time, flux, ids, n_bins=100, n_freq=500000,
                              report_time=report_time, plot=plot, output_dir=output_dir,
                              prefix='TIC'+str(ids[i]))
 
+        # >> calculate phase curve features
         feats = calc_phase_curve(time, flux[i], n_bins=n_bins, n_freq=n_freq,
                                  n_terms=n_terms, report_time=report_time, plot=plot,
                                  output_dir=output_dir, prefix='TIC'+str(ids[i]))
@@ -201,8 +427,6 @@ def find_periodic_obj(ticid, targets, flux, time, sector, output_dir,
             print('TIC'+str(t)+' '+str(res))
     inds = np.nonzero(np.array(results))
     return targets[inds]
-
-
 
 def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
                      plot=False, output_dir='', prefix='', report_time=True,
