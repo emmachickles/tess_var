@@ -36,7 +36,7 @@ from astropy.timeseries import LombScargle
 # ==============================================================================
 
 # >> Sigma clipping
-def sigma_clip_sector(mg, plot=True, plot_int=200, n_sigma=5):
+def sigma_clip_sector(mg, plot=True, plot_int=200, n_sigma=7):
 
     # >> get list of light curves names
     mask_sector_path = mg.datapath + 'mask/sector-%02d'%mg.sector+'/'
@@ -61,15 +61,13 @@ def sigma_clip_sector(mg, plot=True, plot_int=200, n_sigma=5):
 
 
         # >> sigma clip light curve
-        sigma_clip_lc(mg.datapath, lcfile, mg.sector, 
-                      mdumpcsv=mg.mdumpcsv, plot=plot, n_sigma=n_sigma,
-                      savepath=savepath)
+        sigma_clip_lc(mg, lcfile, plot=plot, n_sigma=n_sigma)
 
     if plot:
         clean_sector_diag(mask_sector_path, savepath, sector, mdumpcsv)
 
 
-def sigma_clip_lc(mg,  n_sigma=5, plot=False, max_iter=5,
+def sigma_clip_lc(mg, lcfile, n_sigma=10, plot=False, max_iter=5,
                   timescalbdtrspln=0.5/24.):
 
     mask_sector_path = mg.datapath + 'mask/sector-%02d'%mg.sector+'/'
@@ -77,7 +75,9 @@ def sigma_clip_lc(mg,  n_sigma=5, plot=False, max_iter=5,
     savepath = mg.ensbpath + 'clip/'
 
     # >> load light curve
-    time, flux, meta = dt.open_fits(mask_sector_path, fname=lcfile)
+    data, meta = dt.open_fits(mask_sector_path, fname=lcfile)
+    time = data['TIME']
+    flux = data['FLUX']
 
     # >> initialize variables 
     n_clip = 1 # >> number of data points clipped in an iteration
@@ -138,6 +138,7 @@ def sigma_clip_lc(mg,  n_sigma=5, plot=False, max_iter=5,
     # >> save number of clipped data points
     num_clip = np.count_nonzero(np.isnan(flux_clip)) - \
                np.count_nonzero(np.isnan(flux))
+    print('Total NUM_CLIP: '+str(num_clip))
     table_meta = [('NUM_CLIP', num_clip)]
     ticid = meta['TICID']
 
@@ -195,7 +196,7 @@ def compute_ls_pgram_sector(mg, plot=True, plot_int=200):
     savepath = mg.ensbpath + 'lspm/'
     dt.create_dir(savepath)
 
-    for i in range(len(lcfile_list)):
+    for i in range(6000, len(lcfile_list)):
         if i % plot_int == 0:
             print('Computing LS periodogram of light curve '+str(i)+'/'+\
                   str(len(lcfile_list)))
@@ -211,14 +212,16 @@ def compute_ls_pgram(mg, lcfile, plot=False):
     savepath = mg.ensbpath + 'lspm/'
 
     # >> open light curve file
-    time, flux, meta = dt.open_fits(mask_sector_path, fname=lcfile)
+    data, meta = dt.open_fits(mask_sector_path, fname=lcfile)
+    time = data['TIME']
+    flux = data['FLUX']
     ticid = meta['TICID']
 
     num_inds = np.nonzero(~np.isnan(flux))
     freq, power = LombScargle(time[num_inds], flux[num_inds]).autopower()
 
     # >> save periodogram
-    dt.write_fits(lspm_sector_path, meta, ticid, [freq, power], ['FREQ', 'LPSM'])
+    dt.write_fits(lspm_sector_path, meta, ticid, [freq, power], ['FREQ', 'LSPM'])
 
     if plot:
         fig, ax = plt.subplots(2)
@@ -450,10 +453,19 @@ def calc_phase_curve(t, y, n_bins=100, n_freq=50000, n_terms=2,
         start = datetime.now()
 
     # -- compute periodogram ---------------------------------------------------
-    frequency = np.linspace(1./tmax, 1./tmin, n_freq)
-    power = LombScargle(t, y, nterms=n_terms).power(frequency)
+    # frequency = np.linspace(1./tmax, 1./tmin, n_freq)
+    # power = LombScargle(t, y, nterms=n_terms).power(frequency)
+    num_indx = np.nonzero(~np.isnan(y))
+    t, y = t[num_indx], y[num_indx]
+    frequency, power = LombScargle(t, y, nterms=n_terms).autopower()
 
-    best_freq = frequency[np.argmax(power)] 
+    peak_c = np.argmax(power)
+    peak_freq = np.linspace(frequency[peak_c-100], frequency[peak_c+100], 100000)
+    pow_peak = LombScargle(t,y,nterms=n_terms).power(peak_freq)
+    best_freq = peak_freq[np.argmax(pow_peak)]
+    
+
+    # best_freq = frequency[np.argmax(power)] 
     period = 1/best_freq
 
     # -- compute phase curve ---------------------------------------------------
