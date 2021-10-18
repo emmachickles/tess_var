@@ -24,7 +24,7 @@ featgen      = 'DAE'
 sector       = 1
 
 # -- initialize Mergen object --------------------------------------------------
-mg = mergen.mergen(datapath, savepath, datatype,
+mg = mergen(datapath, savepath, datatype,
                    parampath=parampath)
 
 freq, lspgram, meta = fe.preprocess_lspgram(mg)

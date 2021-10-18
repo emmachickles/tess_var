@@ -36,13 +36,15 @@ from astropy.io import fits
 
 # >> Sigma clipping
 def sigma_clip_data(mg, plot=True, plot_int=200, n_sigma=7,
-                    timescaldtrn=1/24.):
+                    timescaldtrn=1/24., sectors=[]):
     '''Produces clip/ directory, which mirrors structure in raws/, and contains
     sigma clipped light curves.'''
-    sectors = os.listdir(mg.datapath+'mask/')
-    sectors.sort()
 
-    for sector in sectors:
+    if len(sectors) == 0:
+        sectors = os.listdir(mg.datapath+'mask/')
+        sectors.sort()
+
+    for sector in sectors: # >> loop through sectors
         sector_path = mg.datapath+'mask/'+sector+'/' # >> list of sectors
         lcfile_list = os.listdir(sector_path) # >> light curve file names
         clip_path = mg.datapath + 'clip/' + sector + '/' # >> output light curves
@@ -55,8 +57,8 @@ def sigma_clip_data(mg, plot=True, plot_int=200, n_sigma=7,
             lcfile = sector_path+lcfile_list[i]
             if i % plot_int == 0:
                 verbose=True
-                verbose_msg='Sigma clipping light curve '+str(i)+'/'+\
-                            str(len(lcfile_list))
+                verbose_msg='Sigma clipping light curve '+sector+' '+\
+                    str(i)+'/'+str(len(lcfile_list))
                 if plot: plot_clip = True
             else:
                 plot_clip, verbose = False, False
@@ -151,7 +153,8 @@ def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
                   meta, [time, flux_clip],
                   ['TIME', 'FLUX'], table_meta=table_meta)
 
-def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2):
+def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2,
+                    load_txt=True):
     '''Produces text file with TICIDs ranked by the number of data points masked
     during sigma clipping, and a histogram of those numbers.'''
 
@@ -160,43 +163,72 @@ def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2):
     savepath = mg.savepath + 'clip/hists/'
     dt.create_dir(savepath)
 
-    # >> initialize arrays 
-    ticid = np.empty(0)
-    num_clip = np.empty(0)
-    tess_feats = np.empty((0, len(cols)))
 
     # >> loop through sectors
-    for sector in sectors:
-        print(sector)
-        sector_path = mg.datapath+'clip/'+sector+'/' # >> list of sectors
-        lcfile_list = os.listdir(sector_path) # >> light curve file names
+    if load_txt:
+        df = pd.read_csv(savepath+'sigmaclip.txt', sep='\t')
+        sector_num = df['SECTOR']
+        num_clip = df['NUM_CLIP']
+        ticid = df['TICID']
+        tess_feats = []
+        for i in range(len(cols)):
+            tess_feats.append(df[cols[i]])
+        tess_feats = np.array(tess_feats).T
+    else:
 
-        # >> read TESS features for sector
-        tic_cat = pd.read_csv(mg.metapath+sector+'-tic_cat.csv', index_col=False)
+        # >> initialize arrays 
+        ticid = np.empty(0)
+        sector_num = np.empty(0)
+        num_clip = np.empty(0)
+        tess_feats = np.empty((0, len(cols)))
 
-        # >> loop through light curves in sector
-        for lcfile in os.listdir(sector_path):
-            # >> open sigma-clipped light curve
-            lchdu_clip = fits.open(sector_path+lcfile)
-            objid = lchdu_clip[0].header['TICID']
-            ticid = np.append(ticid, objid)
-            
-            # >> open quality masked raw light curves (before clipping)
-            lchdu_mask = fits.open(mg.datapath+'mask/'+sector+'/'+\
-                                   str(int(objid))+'.fits')
-            n = np.count_nonzero(np.isnan(lchdu_mask[1].data['FLUX'])) - \
-                np.count_nonzero(np.isnan(lchdu_mask[1].data['FLUX']))
-            num_clip = np.append(num_clip, n)
+        for sector in sectors:
+            print(sector)
+            sector_path = mg.datapath+'clip/'+sector+'/' # >> list of sectors
+            lcfile_list = os.listdir(sector_path) # >> light curve file names
 
-            # >> find TESS features
-            ind = np.nonzero(tic_cat['ID'].to_numpy() == objid)[0]
-            if len(ind) == 0: # >> target not in tic_cat
-                target, feats = dt.get_tess_features(objid, cols=cols)
-            else:
-                feats = []
-                for i in range(len(cols)):
-                    feats.append(tic_cat.iloc[ind[0]][cols[i]])
-            tess_feats = np.append(tess_feats, np.array([feats]), axis=0)
+            # >> read TESS features for sector
+            tic_cat = pd.read_csv(mg.metapath+sector+'-tic_cat.csv', index_col=False)
+
+            # >> loop through light curves in sector
+            for lcfile in os.listdir(sector_path):
+                objid = int(lcfile.split('.')[0])
+
+                # >> open sigma-clipped light curve
+                lchdu_clip = fits.open(sector_path+lcfile)
+                objid = lchdu_clip[0].header['TICID']
+                ticid = np.append(ticid, objid)
+                sector_num = np.append(sector_num, int(sector.split('-')[1]))
+
+                # >> open quality masked raw light curves (before clipping)
+                lchdu_mask = fits.open(mg.datapath+'mask/'+sector+'/'+\
+                                       str(int(objid))+'.fits')
+                n = np.count_nonzero(np.isnan(lchdu_clip[1].data['FLUX'])) - \
+                    np.count_nonzero(np.isnan(lchdu_mask[1].data['FLUX']))
+                num_clip = np.append(num_clip, n)
+
+                # >> find TESS features
+                ind = np.nonzero(tic_cat['ID'].to_numpy() == objid)[0]
+                if len(ind) == 0: # >> target not in tic_cat
+                    target, feats = dt.get_tess_features(objid, cols=cols)
+                else:
+                    feats = []
+                    for i in range(len(cols)):
+                        feats.append(tic_cat.iloc[ind[0]][cols[i]])
+                tess_feats = np.append(tess_feats, np.array([feats]), axis=0)
+
+        # >> text file of number of clipped data points
+        sort_indx = np.argsort(num_clip)[::-1]
+        df_dict = {'TICID': ticid[sort_indx],
+                   'SECTOR': sector_num[sort_indx],
+                   'NUM_CLIP': num_clip[sort_indx]}
+        for i in range(len(cols)):
+            df_dict[cols[i]] = tess_feats[:,i]
+        df = pd.DataFrame(df_dict)
+        fname = savepath+'sigmaclip.txt'
+        df.to_csv(fname, index=False, sep='\t')
+        print('Saved '+fname)
+
 
     # >> number of clipped data points over all sectors
     fig, ax = plt.subplots(figsize=(5,5))
@@ -209,13 +241,6 @@ def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2):
     fname = savepath+'sigmaclip_hist.png'
     fig.tight_layout()
     fig.savefig(fname)
-    print('Saved '+fname)
-
-    sort_indx = np.argsort(num_clip)[::-1]
-    df = pd.DataFrame({'TICID': ticid[sort_indx],
-                       'NUM_CLIP': num_clip[sort_indx]})
-    fname = savepath+'sigmaclip.txt'
-    df.to_csv(fname, index=False, sep='\t')
     print('Saved '+fname)
 
     # >> number of clipped points sorted by TESS features
@@ -235,9 +260,12 @@ def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2):
                     end = (row*ncols + col + 1)*(len(tess_feats)//n_div)
                 # data = tess_feats[:,i][sorted_inds][start:end]
                 data = num_clip[sorted_inds][start:end]
-                title = str(np.round(data[0],3)) + ' < '+cols[i]+' < '+\
-                        str(np.round(data[-1],3))
+                feat_min = np.nanmin(tess_feats[:,i][sorted_inds][start:end])
+                feat_max = np.nanmax(tess_feats[:,i][sorted_inds][start:end])
+                title = str(np.round(feat_min,3)) + ' < '+cols[i]+' < '+\
+                        str(np.round(feat_max,3))
                 a.set_title(title)
+                a.set_yscale('log')
                 a.set_ylabel('Number of objects')
                 a.set_xlabel('Number of clipped points')
                 a.hist(data, bins=bins)
@@ -256,13 +284,15 @@ def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2):
 
 # -- LS Periodograms -----------------------------------------------------------
 
-def compute_ls_pgram_data(mg, plot=True, plot_int=200, n_freq=200000):
+def compute_ls_pgram_data(mg, plot=True, plot_int=200, n_freq=100000,
+                          sectors=[]):
     """
     * mg : Mergen object """
 
     # sectors = os.listdir(mg.datapath+'clip/') # !!
-    sectors = os.listdir(mg.datapath+'clip/')
-    sectors.sort()
+    if len(sectors) == 0:
+        sectors = os.listdir(mg.datapath+'clip/')
+        sectors.sort()
 
     for sector in sectors:
         sector_path = mg.datapath+'clip/'+sector+'/' # >> list of sectors
@@ -278,8 +308,8 @@ def compute_ls_pgram_data(mg, plot=True, plot_int=200, n_freq=200000):
             lcfile = mg.datapath+'clip/'+sector+'/'+lcfile_list[i]
 
             if i % plot_int == 0:
-                print('Computing LS periodogram of light curve '+str(i)+'/'+\
-                      str(len(lcfile_list)))
+                print('Computing LS periodogram of light curve '+sector+' '+\
+                      str(i)+'/'+str(len(lcfile_list)))
                 if plot: plot_pgram = True
             else:
                 plot_pgram = False
@@ -287,7 +317,8 @@ def compute_ls_pgram_data(mg, plot=True, plot_int=200, n_freq=200000):
                              n_freq=n_freq)
 
 def compute_ls_pgram(mg, lcfile, plot=False, sector='', n_freq=200000,
-                     max_freq=1/(8/1440.), min_freq=1/27., savepath=None):
+                     max_freq=1/(8/1440.), min_freq=1/27., savepath=None,
+                     verbose=False):
     '''min_freq : 8 minutes, > average Nyquist frequency
     max_freq : 27 days baseline
     '''
@@ -312,49 +343,111 @@ def compute_ls_pgram(mg, lcfile, plot=False, sector='', n_freq=200000,
 
     # >> save periodogram
     lspm_path = mg.datapath+'lspm/'+sector+'/'
-    dt.write_fits(lspm_path, meta, [freq, power], ['FREQ', 'LSPM'])
+    dt.write_fits(lspm_path, meta, [freq, power], ['FREQ', 'LSPM'],
+                  verbose=verbose)
 
     if plot:
-        fig, ax = plt.subplots(2)
-        ax[0].plot(time, flux, '.k', markersize=2, fillstyle='full')
-        ax[1].plot(freq, power)
+        fig, ax = plt.subplots(3)
+                
+        lchdu_mask = fits.open(mg.datapath+'mask/'+sector+'/'+\
+                               str(int(ticid))+'.fits')
+        ax[0].set_title('Raw light curve (with quality flag mask)')
+        ax[0].plot(lchdu_mask[1].data['TIME'], lchdu_mask[1].data['FLUX'],
+                   '.k', ms=2, fillstyle='full')
         ax[0].set_xlabel('Time [BJD - 2457000]')
         ax[0].set_ylabel('Relative flux')
-        ax[1].set_xlabel('Frequency (days -1)')
-        ax[1].set_ylabel('LS Periodogram')
+
+        ax[1].set_title('Sigma clipped light curve')
+        ax[1].plot(time, flux, '.k', markersize=2, fillstyle='full')
+        ax[1].set_xlabel('Time [BJD - 2457000]')
+        ax[1].set_ylabel('Relative flux')
+
+        ax[2].set_title('LS-periodogram')
+        ax[2].plot(1/freq, power)
+        ax[2].set_xlabel('Period (days)')
+        ax[2].set_yscale('log')
+        # ax[2].plot(freq, power)
+        # ax[2].set_xlabel('Frequency (days -1)')
+        ax[2].set_ylabel('LS Periodogram')
         # ax[i, 1].set_xscale('log')
         ax[1].set_yscale('log')
         fig.tight_layout()
         fname = savepath+'lspgram_TIC'+str(int(ticid))+'.png'
         fig.savefig(fname)
         print('Saved '+fname)
+        plt.close(fig)
 
-def preprocess_lspgram(mg):
+
+def preprocess_lspgram(mg, n_freq=100000):
     sectors = os.listdir(mg.datapath+'lspm/')
     sectors.sort()
-    freq, lspgram, meta = [], [], []
+    freq, lspgram, sector_num, ticid = [], [], [], []
+    # freq = np.empty((0,n_freq))
+    # lspgram = np.empty((0,n_freq))
+    # sector_num = np.empty(0)
+    # ticid = np.empty(0)
+
+    savepath = mg.datapath+'dae/'
+    dt.create_dir(savepath)
+
     for sector in sectors[:1]:
+
         sector_path = mg.datapath+'lspm/'+sector+'/'
         lspmfile_list = os.listdir(sector_path)
 
         for i in range(len(lspmfile_list)):
+            if i % 200 == 0:
+                print('Preprocessing LS periodogram '+sector+' '+str(i)+'/'+\
+                      str(len(lspmfile_list)))
+
             lspmfile = mg.datapath+'lspm/'+sector+'/'+lspmfile_list[i]
-            with fits.open(lspmfile) as hdul:
+
+            # start = datetime.now()
+
+            # lspgram = np.append(lspgram,
+            #                     np.expand_dims(fits.getdata(lspmfile, 1)['LSPM'], 0),
+            #                     axis=0)
+
+            with fits.open(lspmfile, memmap=False) as hdul:
                 freq.append(hdul[1].data['FREQ'])
                 lspgram.append(hdul[1].data['LSPM'])
-                meta.append(hdul[0].header)
-            # data, m = dt.open_fits(fname=lspmfile)
-            # if type(data) != type(None):
-            #     x.append(data['FREQ'])
-            #     y.append(data['LSPM'])
-            #     meta.append(m)
+                sector_num.append(hdul[0].header['SECTOR'])
+                ticid.append(hdul[0].header['TICID'])
 
-    freq = freq[0]
-    lspgram = np.array(lspgram)
+                
+
+                # freq = np.append(freq, np.expand_dims(hdul[1].data['FREQ'],0),
+                #                  axis=0)
+                # lspgram = np.append(lspgram, np.expand_dims(hdul[1].data['LSPM'],0),
+                #                     axis=0)
+                # sector_num = np.append(sector_num, hdul[0].header['SECTOR'])
+                # ticid = np.append(ticid, hdul[0].header['TICID'])
+
+            # hdul = fits.open(lspmfile)
+            # freq = np.append(freq, np.expand_dims(hdul[1].data['FREQ'],0),
+            #                  axis=0)
+            # lspgram = np.append(lspgram, np.expand_dims(hdul[1].data['LSPM'],0),
+            #                     axis=0)
+            # sector_num = np.append(sector_num, hdul[0].header['SECTOR'])
+            # ticid = np.append(ticid, hdul[0].header['TICID'])
+            # hdul.close()
+
+            if i % 500 == 0:
+                gc.collect()
+
+            # end = datetime.now()
+            # dur_sec = (end-start).total_seconds()
+            # print('Time to open Fits: '+str(dur_sec))
+
+        
+    freq, lspgram  = np.array(freq), np.array(lspgram)
+    sector_num, ticid = np.array(sector_num), np.array(ticid)
     lspgram = lt.DAE_preprocessing(lspgram, norm_type='standardization')
 
-    return freq, lspgram, meta
-    # x = np.linspace(200000)
+    dt.write_fits(savepath, None, [freq, lspgram, sector_num, ticid],
+                  ['FREQ', 'LSPM', 'SECTOR', 'TICID'],
+                  fmt=['D', 'D', 'K', 'K'], fname='lspgram.fits')
+
 
             
 # -- Phase Curve Features ------------------------------------------------------
