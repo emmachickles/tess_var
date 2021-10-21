@@ -3,17 +3,16 @@
 # 
 # feat_eng.py // Emma Chickles
 # 
-# -- existing functions --------------------------------------------------------
-# 
-# -- Preprocessing --
-# * clean_sector
-#   * clean_sector_diag
-#   * sigma_clip
+# -- Data Cleaning -- 
+# * sigma_clip_data                     Remove outlier data pts and flares
+#   * sigma_clip_lc
+#   * sigma_clip_diag
 # 
 # -- Feature Generation --
 # LS Periodograms
-#   * compute_ls_pgram_sector
+#   * compute_ls_pgram_data             LS-Periodograms from light curves
 #     * compute_ls_pgram
+#     * preprocess_lspgram              Prepare for ML
 # Phase Curve Features
 #   * create_phase_curve_feats
 #     * mask_harmonics
@@ -21,16 +20,16 @@
 #     * calc_phase_curve
 # 
 # ==============================================================================
+# ==============================================================================
 
 from __init__ import *
 from scipy.stats import sigmaclip
 from astropy.timeseries import LombScargle
 from astropy.io import fits
 
-
 # ==============================================================================
 # ==============================================================================
-# == Preprocessing =============================================================
+# == Data Cleaning  ============================================================
 # ==============================================================================
 # ==============================================================================
 
@@ -378,10 +377,9 @@ def compute_ls_pgram(mg, lcfile, plot=False, sector='', n_freq=200000,
         plt.close(fig)
 
 
-def preprocess_lspgram(mg, n_freq=100000):
+def preprocess_lspgram(mg, n_freq=100000, n_chunk=4):
     sectors = os.listdir(mg.datapath+'lspm/')
     sectors.sort()
-    freq, lspgram, sector_num, ticid = [], [], [], []
     # freq = np.empty((0,n_freq))
     # lspgram = np.empty((0,n_freq))
     # sector_num = np.empty(0)
@@ -390,65 +388,80 @@ def preprocess_lspgram(mg, n_freq=100000):
     savepath = mg.datapath+'dae/'
     dt.create_dir(savepath)
 
-    for sector in sectors[:1]:
+    for chunk in range(n_chunk):
 
-        sector_path = mg.datapath+'lspm/'+sector+'/'
-        lspmfile_list = os.listdir(sector_path)
+        freq, lspgram, sector_num, ticid = [], [], [], []
+        sectors_chunk = sectors[chunk*n_chunk : chunk*n_chunk + n_chunk]
 
-        for i in range(len(lspmfile_list)):
-            if i % 200 == 0:
-                print('Preprocessing LS periodogram '+sector+' '+str(i)+'/'+\
-                      str(len(lspmfile_list)))
+        for sector in sectors_chunk:
 
-            lspmfile = mg.datapath+'lspm/'+sector+'/'+lspmfile_list[i]
+            sector_path = mg.datapath+'lspm/'+sector+'/'
+            lspmfile_list = os.listdir(sector_path)
 
-            # start = datetime.now()
+            for i in range(len(lspmfile_list)):
+                if i % 200 == 0:
+                    print('Preprocessing LS periodogram '+sector+' '+str(i)+'/'+\
+                          str(len(lspmfile_list)))
 
-            # lspgram = np.append(lspgram,
-            #                     np.expand_dims(fits.getdata(lspmfile, 1)['LSPM'], 0),
-            #                     axis=0)
+                lspmfile = mg.datapath+'lspm/'+sector+'/'+lspmfile_list[i]
 
-            with fits.open(lspmfile, memmap=False) as hdul:
-                freq.append(hdul[1].data['FREQ'])
-                lspgram.append(hdul[1].data['LSPM'])
-                sector_num.append(hdul[0].header['SECTOR'])
-                ticid.append(hdul[0].header['TICID'])
+                # start = datetime.now()
 
+                with fits.open(lspmfile, memmap=False) as hdul:
+                    freq.append(hdul[1].data['FREQ'])
+                    lspgram.append(hdul[1].data['LSPM'])
+                    sector_num.append(hdul[0].header['SECTOR'])
+                    ticid.append(hdul[0].header['TICID'])
+
+                if i % 500 == 0:
+                    gc.collect()
+
+                # end = datetime.now()
+                # dur_sec = (end-start).total_seconds()
+                # print('Time to open Fits: '+str(dur_sec))
                 
+        # >> convert lists to numpy arrays
+        freq, lspgram  = np.array(freq), np.array(lspgram)
+        sector_num, ticid = np.array(sector_num), np.array(ticid)
 
-                # freq = np.append(freq, np.expand_dims(hdul[1].data['FREQ'],0),
-                #                  axis=0)
-                # lspgram = np.append(lspgram, np.expand_dims(hdul[1].data['LSPM'],0),
-                #                     axis=0)
-                # sector_num = np.append(sector_num, hdul[0].header['SECTOR'])
-                # ticid = np.append(ticid, hdul[0].header['TICID'])
+        # >> standardize
+        lspgram = lt.DAE_preprocessing(lspgram, norm_type='standardization', ax=1)
 
-            # hdul = fits.open(lspmfile)
-            # freq = np.append(freq, np.expand_dims(hdul[1].data['FREQ'],0),
-            #                  axis=0)
-            # lspgram = np.append(lspgram, np.expand_dims(hdul[1].data['LSPM'],0),
-            #                     axis=0)
-            # sector_num = np.append(sector_num, hdul[0].header['SECTOR'])
-            # ticid = np.append(ticid, hdul[0].header['TICID'])
-            # hdul.close()
-
-            if i % 500 == 0:
-                gc.collect()
-
-            # end = datetime.now()
-            # dur_sec = (end-start).total_seconds()
-            # print('Time to open Fits: '+str(dur_sec))
-
-        
-    freq, lspgram  = np.array(freq), np.array(lspgram)
-    sector_num, ticid = np.array(sector_num), np.array(ticid)
-    lspgram = lt.DAE_preprocessing(lspgram, norm_type='standardization')
-
-    dt.write_fits(savepath, None, [freq, lspgram, sector_num, ticid],
-                  ['FREQ', 'LSPM', 'SECTOR', 'TICID'],
-                  fmt=['D', 'D', 'K', 'K'], fname='lspgram.fits')
+        # >> format 'P*()' creates column with variable length
+        # >> format 'D' is floats, format 'K' is integers
+        fname = sectors_chunk[0]+'-'+sectors_chunk[-1]+'-lspgram.fits'
+        dt.write_fits(savepath, None, [freq, lspgram, sector_num, ticid],
+                      ['FREQ', 'LSPM', 'SECTOR', 'TICID'],
+                      fmt=['PD()', 'PD()', 'K', 'K'], fname=fname)
 
 
+def load_lspgram(mg):
+    lspmpath = mg.datapath+'dae/'
+    chunks = os.listdir(lspmpath)
+    chunks = ['sector-01-lspgram.fits']
+
+    freq, lspm, sector_num, ticid = [], [], [], []
+
+    for chunk in chunks:
+        with fits.open(lspmpath+chunk) as hdul:
+            freq.append(hdul[1].data['FREQ'])
+            lspm.append(hdul[1].data['LSPM'])
+            sector_num.append(hdul[1].data['SECTOR'])
+            ticid.append(hdul[1].data['TICID'])
+
+    mg.freq = freq[0]
+    mg.pgram = np.concatenate(lspm, axis=0)
+    sector_num = np.concatenate(sector_num)
+    mg.objid = np.concatenate(ticid)
+
+    inds = np.nonzero(np.array([len(l) for l in mg.pgram]) == 100000)
+    mg.pgram = np.array(mg.pgram[inds])
+    mg.objid = mg.objid[inds]
+    tmp = np.empty((len(mg.pgram), len(mg.pgram[0])))
+    for i in range(len(mg.pgram)):
+        tmp[i] = mg.pgram[i]
+    mg.pgram=tmp
+    
             
 # -- Phase Curve Features ------------------------------------------------------
 

@@ -18,7 +18,7 @@ datapath = '/scratch/data/tess/lcur/spoc/'
 # savepath     = '/nfs/blender/data/tdaylan/Mergen_Run_2/'
 savepath = '/scratch/echickle/'
 
-parampath    = '/home/echickle/daehyperparams.txt'
+parampath    = '/home/echickle/work/daehyperparams.txt'
 datatype     = 'SPOC'
 featgen      = 'DAE'
 sector       = 1
@@ -27,7 +27,12 @@ sector       = 1
 mg = mergen(datapath, savepath, datatype,
                    parampath=parampath)
 
-freq, lspgram, meta = fe.preprocess_lspgram(mg)
+# fe.preprocess_lspgram(mg)
+fe.load_lspgram(mg)
+mg.generate_dae_features()
+mg.run_feature_analysis("DAE")
+mg.run_vis("DAE")
+
 # mg.load_lightcurves_local(mg.datapath+'clip/')
 # mg.preprocess_data(featgen)
 
