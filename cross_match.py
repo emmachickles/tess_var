@@ -15,10 +15,24 @@
 # 
 # organizing object types:
 # * get_var_descr
-# * get_var_hier
+# * make_parent_dict
+# * make_variability_tree
+# * make_redundant_otype_dict
+# * merge_otype
+# * get_parent_otypes
+# * get_parents_only
+# * make_remove_class_list
+# * make_flagged_class_list
+# * write_true_label_txt
+# * make_true_label_txt
+# * read_otype_txt
+# * quick_simbad
+# * get_true_var_types
 # 
 # -- TODO ----------------------------------------------------------------------
 # 
+# * clean up organization fcns
+#   * get_var_hier fcn
 # * deal with dependencies on data_dir (clarify what is required to run these
 #   functions)
 #   * should there be a function that sets up the folder structure? or should
@@ -37,7 +51,8 @@ from __init__ import *
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
-def query_simbad(sector='all', data_dir='data/', query_mast=False):
+def query_simbad(metapath, savepath, sector='all', query_mast=False,
+                 align='%-15s,%-50s,%-30s'):
     '''Cross-matches ASAS-SN catalog with TIC catalog based on matching GAIA IDs
     * data_dir
     * sector: 'all' or int, currently only handles short-cadence'''
@@ -55,26 +70,29 @@ def query_simbad(sector='all', data_dir='data/', query_mast=False):
 
     for sector in sectors:
         print('Sector '+str(sector))
-        out_f = data_dir+'databases/Sector'+str(sector)+'_simbad.txt'
+        out_f = metapath+'spoc/cat/sector-%02d'%sector+'_simbad_raw.txt'
 
-        ticid_simbad = []
-        otypes_simbad = []
-        main_id_simbad = []
-        bibcode_simbad = []
+        with open(out_f, 'w') as f:
+            # f.write('TICID'+sep+'TYPE'+sep+'MAIN_ID\n')
+            f.write(align%('TICID', 'TYPE', 'MAIN_ID')+'\n')
 
-        with open(out_f, 'a') as f: # >> make file if not already there
-            f.write('')    
-
-        with open(out_f, 'r') as f:
-            lines = f.readlines()
-            ticid_already_classified = []
-            for line in lines:
-                ticid_already_classified.append(float(line.split(',')[0]))
+        ticid_already_classified = []
+        # if not os.path.exists(out_f):
+        #     with open(out_f, 'w') as f:
+        #         f.write('TICID\tTYPE\tMAIN_ID\n')
+        # with open(out_f, 'r') as f:
+        #     lines = f.readlines()
+        #     ticid_already_classified = []
+        #     for line in lines[1:]:
+        #         ticid_already_classified.append(float(line.split(',')[0]))
 
         if not query_mast:
-            tic_cat=pd.read_csv(data_dir+'Sector'+str(sector)+'/Sector'+str(sector)+\
-                                     'tic_cat_all.csv', index_col=False)
+            tic_cat=pd.read_csv(metapath+'spoc/tic/sector-%02d'%sector+\
+                                     '-tic_cat.csv')
             ticid_list = tic_cat['ID']
+            # sector_data = np.loadtxt(metapath+'spoc/targ/2m/'+\
+            #                          'all_targets_S%03d'%sector+'_v1.txt')
+            # ticid_list = sector_data[:,0]
 
         print(str(len(ticid_list))+' targets')
         print(str(len(ticid_already_classified))+' targets completed')
@@ -87,6 +105,7 @@ def query_simbad(sector='all', data_dir='data/', query_mast=False):
             count += 1
             res = None
 
+            n_iter = 0
             while res is None:
                 try:
                     print(str(count)+'/'+str(len(ticid_list))+\
@@ -121,29 +140,36 @@ def query_simbad(sector='all', data_dir='data/', query_mast=False):
                                 res = customSimbad.query_object(target_new)
                                 # time.sleep(6)
 
-
-                    if type(res) == type(None):
-                        print('failed :(')
-                        res=0 
-                        with open(out_f, 'a') as f:
-                            f.write('{},{},{}\n'.format(tic, '', ''))              
-                        ticid_simbad.append(tic)
-                        otypes_simbad.append('none')
-                        main_id_simbad.append('none')                
-                    else:
-                        otypes = res['OTYPES'][0].decode('utf-8')
-                        main_id = res['MAIN_ID'].data[0].decode('utf-8')
-                        ticid_simbad.append(tic)
-                        otypes_simbad.append(otypes)
-                        main_id_simbad.append(main_id)
-
-                        with open(out_f, 'a') as f:
-                            f.write('{},{},{}\n'.format(tic, otypes, main_id))
-
                     # time.sleep(6)
                 except:
                     pass
                     print('connection failed! Trying again now')
+
+                n_iter += 1
+
+                if n_iter > 5: 
+                    break
+
+            # -- save results --------------------------------------------------
+            if type(res) == type(None):
+                print('failed :(')
+                res=0 
+                with open(out_f, 'a') as f:
+                    # line = '{}'+sep+sep+'\n'
+                    # f.write(line.format(tic))
+                    f.write(align%(tic, '', '')+'\n')
+
+            else:
+                # otypes = res['OTYPES'][0].decode('utf-8')
+                otypes = res['OTYPES'][0]
+                # main_id = res['MAIN_ID'].data[0].decode('utf-8')
+                main_id = res['MAIN_ID'][0]
+
+                with open(out_f, 'a') as f:
+                    # line = '{}'+sep+'{}'+sep+'{}\n'
+                    # f.write(line.format(tic, otypes, main_id))
+                    f.write(align%(tic, otypes, main_id)+'\n')
+
             
 def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
     '''Cross-matches GCVS catalog with TIC catalog.
@@ -233,15 +259,24 @@ def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
                 plt.savefig(prefix+'_tol'+str(tol)+'.png')
                 plt.close()
                 
-def query_asas_sn(data_dir='./', sector='all', diag_plot=True):
+def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
+                  use_sep=False, align='%-15s,%-10s,%-30s'):
     '''Cross-matches ASAS-SN catalog with TIC catalog based on matching GAIA IDs
     * data_dir
     * sector: 'all' or int, currently only handles short-cadence
+    
+    Can read output txt file with
+    pd.read_csv('sector-01_asassn.txt', delimiter='\s+,')
     '''
-    data = pd.read_csv(data_dir+'asas_sn_database.csv')
+    # data = pd.read_csv(data_dir+'asas_sn_database.csv')
+    data = pd.read_csv(metapath+'asassn_catalog.csv')
     print('Loaded asas_sn_database.csv')
-    data_coords = coord.SkyCoord(data['RAJ2000'], data['DEJ2000'],
+    data_coords = coord.SkyCoord(data['raj2000'], data['dej2000'],
                                  unit=(u.deg, u.deg))
+    ticid = data['tic_id']
+    nan_inds = ['TIC ' in str(i) for i in ticid]
+    ticid = np.array(ticid)[np.nonzero(np.array(nan_inds))]
+    ticid = np.array([int(float(i[4:])) for i in ticid])
 
     if sector=='all':
         sectors = list(range(1,27))
@@ -249,88 +284,164 @@ def query_asas_sn(data_dir='./', sector='all', diag_plot=True):
         sectors=[sector]
 
     for sector in sectors:
-        # >> could also have retrieved ra dec from all_targets_S*_v1.txt
-        sector_data = pd.read_csv(data_dir+'Sector'+str(sector)+\
-                                  '/Sector'+str(sector)+'tic_cat_all.csv',
-                                  index_col=False)
-        print('Loaded Sector'+str(sector)+'tic_cat_all.csv')
-        out_fname = data_dir+'databases/Sector'+str(sector)+'_asassn.txt'
+        # sector_data = pd.read_csv(metapath+'spoc/tic/sector-%02d'%sector+\
+        #                           '-tic_cat.csv')
+        sector_data = np.loadtxt(metapath+'spoc/targ/2m/'+\
+                                 'all_targets_S%03d'%sector+'_v1.txt')
+        out_fname = metapath+'spoc/cat/sector-%02d'%sector+'_asassn.txt'
 
-        _, comm1, comm2 = np.intersect1d(sector_data['GAIA'], data['GDR2_ID'],
+        _, comm1, comm2 = np.intersect1d(sector_data[:,0], ticid,
                                          return_indices=True)
 
         # >> save cross-matched target in text file
         with open(out_fname, 'w') as f:
+            # f.write('TICID\tTYPE\tASASSN_NAME\n')
+            f.write(align%('TICID', 'TYPE', 'ASASSN_NAME')+'\n')
             for i in range(len(sector_data)):            
                 if i in comm1:
                     ind = comm2[np.nonzero(comm1 == i)][0]
-                    f.write(str(int(sector_data['ID'][i]))+','+\
-                            str(data['Type'][ind])+','+str(data['ID'][ind])+'\n')
+                    # f.write(str(int(sector_data[i,0]))+'\t'+\
+                    #         str(data['variable_type'][ind])+'\t'+\
+                    #         str(data['asassn_name'][ind])+'\n')
+
+                    f.write(align%(int(sector_data[i,0]), \
+                                   data['variable_type'][ind],\
+                                   data['asassn_name'][ind])+'\n')
                 else:
-                    f.write(str(int(sector_data['ID'][i]))+',,\n')
+                    # f.write(str(int(sector_data[i,0]))+'\t\t\n')
+                    f.write(align%(int(sector_data[i,0]),'NONE','NONE')+'\n')
         print('Saved '+out_fname)
 
         if diag_plot:
-            prefix = data_dir+'databases/Sector'+str(sector)+'_'
-
             # >> compare magnitude from TIC and ASAS-SN of cross-matched targets
             plt.figure()
-            plt.plot(sector_data['GAIAmag'][comm1], data['Mean Vmag'][comm2], '.k')
-            plt.xlabel('GAIA magnitude (TIC)')
+            plt.plot(sector_data[:,3][comm1], data['mean_vmag'][comm2], '.k')
+            plt.xlabel('TESS magnitude (TIC)')
             plt.ylabel('Mean Vmag (ASAS-SN)')
-            plt.savefig(prefix+'asassn_mag_cross_match.png')
+            plt.savefig(savepath+'cat/sector-%02d'%sector+\
+                        '_asassn_mag_cross_match.png')
             plt.close()
 
-            # >> get minimum separations between TIC and ASAS-SN targts
-            if os.path.exists(prefix+'asassn_sep.txt'):
-                sep_arcsec = np.loadtxt(prefix+'asassn_sep.txt')
-                min_inds = np.loadtxt(prefix+'asassn_sep_inds.txt').astype('int')
-            else:
-                min_sep = []
-                min_inds = []
-                for i in range(len(sector_data)):
-                    print('TIC '+str(int(sector_data['ID'][i]))+'\t'+str(i)+'/'+\
-                          str(len(sector_data)))
-                    ticid_coord = coord.SkyCoord(sector_data['ra'][i],
-                                                 sector_data['dec'][i],
-                                                 unit=(u.deg, u.deg)) 
-                    sep = ticid_coord.separation(data_coords)
-                    min_sep.append(np.min(sep))
-                    min_inds.append(np.argmin(sep))
-                sep_arcsec = np.array([sep.to(u.arcsec).value for sep in min_sep])
-                min_inds = np.array(min_inds)
-                np.savetxt(prefix+'asassn_sep.txt', sep_arcsec)
-                np.savetxt(prefix+'asassn_sep_inds.txt', min_inds)
+            plt.figure()
+            plt.plot(sector_data[:,4][comm1], data['raj2000'][comm2], '.k')
+            plt.xlabel('RA (TIC)')
+            plt.ylabel('RA (ASAS-SN)')
+            plt.savefig(savepath+'cat/sector-%02d'%sector+\
+                        '_asassn_ra_cross_match.png')
+            plt.close()
 
-            # >> make histogram of minimum separations
-            fig, ax = plt.subplots()
-            ax.hist(sep_arcsec, bins=10**np.linspace(-2, 4, 30), log=True)
-            ax.set_xlabel('arcseconds')
-            ax.set_ylabel('number of targets in Sector '+str(sector))
-            ax.set_xscale('log')
-            fig.savefig(prefix+'asassn_sep_arcsec.png')
+            plt.figure()
+            plt.plot(sector_data[:,5][comm1], data['dej2000'][comm2], '.k')
+            plt.xlabel('DEC (TIC)')
+            plt.ylabel('DEC (ASAS-SN)')
+            plt.savefig(savepath+'cat/sector-%02d'%sector+\
+                        '_asassn_de_cross_match.png')
+            plt.close()
 
-            fig1, ax1 = plt.subplots()
-            ax1.hist(sep_arcsec[comm1], bins=10**np.linspace(-2, 4, 30), log=True)
-            ax1.set_xlabel('arcseconds')
-            ax1.set_ylabel('number of cross-matched targets in Sector '+str(sector))
-            ax1.set_xscale('log')
-            ax1.set_ylim(ax.get_ylim())
-            fig1.savefig(prefix+'asassn_sep_cross_match.png')
+            if use_sep:
+                # >> get minimum separations between TIC and ASAS-SN targts
+                if os.path.exists(savepath+'cat/asassn_sep.txt'):
+                    sep_arcsec = np.loadtxt(savepath+'cat/asassn_sep.txt')
+                    min_inds = np.loadtxt(savepath+\
+                                          'cat/asassn_sep_inds.txt').astype('int')
+                else:
+                    min_sep = []
+                    min_inds = []
+                    for i in range(len(sector_data)):
+                        print('TIC '+str(int(sector_data[i,0]))+'\t'+str(i)+\
+                              '/'+str(len(sector_data)))
+                        ticid_coord = coord.SkyCoord(sector_data[i,4],
+                                                     sector_data[i,5],
+                                                     unit=(u.deg, u.deg)) 
+                        sep = ticid_coord.separation(data_coords)
+                        min_sep.append(np.min(sep))
+                        min_inds.append(np.argmin(sep))
+                    sep_arcsec = np.array([sep.to(u.arcsec).value for sep in min_sep])
+                    min_inds = np.array(min_inds)
+                    np.savetxt(savepath+'cat/asassn_sep.txt', sep_arcsec)
+                    np.savetxt(savepath+'cat/asassn_sep_inds.txt', min_inds)
 
-            # >> compare magnitude from TIC and ASAS-SN of cross-matched targets
-            tol_tests = [10, 1, 0.1]
-            for tol in tol_tests:
-                inds1 = np.nonzero(sep_arcsec < tol)
-                inds2 = min_inds[inds1]
-                plt.figure()
-                plt.plot(sector_data['GAIAmag'][inds1][0],
-                         data['Mean Vmag'][inds2], '.k')
-                plt.xlabel('GAIA magnitude (TIC)')
-                plt.ylabel('Mean Vmag (ASAS-SN)')
-                plt.savefig(prefix+'asassn_mag_tol'+str(tol)+'.png')
-                plt.close()
+                # >> make histogram of minimum separations
+                fig, ax = plt.subplots()
+                ax.hist(sep_arcsec, bins=10**np.linspace(-2, 4, 30), log=True)
+                ax.set_xlabel('arcseconds')
+                ax.set_ylabel('number of targets in Sector '+str(sector))
+                ax.set_xscale('log')
+                fig.savefig(savepath+'cat/asassn_sep_arcsec.png')
 
+                fig1, ax1 = plt.subplots()
+                ax1.hist(sep_arcsec[comm1], bins=10**np.linspace(-2, 4, 30), log=True)
+                ax1.set_xlabel('arcseconds')
+                ax1.set_ylabel('number of cross-matched targets in Sector '+str(sector))
+                ax1.set_xscale('log')
+                ax1.set_ylim(ax.get_ylim())
+                fig1.savefig(savepath+'cat/asassn_sep_cross_match.png')
+
+                # >> compare magnitude from TIC and ASAS-SN of cross-matched targets
+                tol_tests = [10, 1, 0.1]
+                for tol in tol_tests:
+                    inds1 = np.nonzero(sep_arcsec < tol)
+                    inds2 = min_inds[inds1]
+                    plt.figure()
+                    plt.plot(sector_data[:,3][inds1][0],
+                             data['mean_vmag'][inds2], '.k')
+                    plt.xlabel('TESS magnitude (TIC)')
+                    plt.ylabel('Mean Vmag (ASAS-SN)')
+                    plt.savefig(savepath+'cat/asassn_mag_tol'+str(tol)+'.png')
+                    plt.close()
+
+def correct_simbad_to_vizier(metapath,
+                             var_simbad='tess_stellar_var/docs/var_simbad.txt',
+                             uncertainty_flags=[':', '?', '*'],
+                             align='%-15s,%-50s,%-30s'):
+    
+    # -- create dictionary from Simbad to GCVS labels --------------------------
+    with open(var_simbad, 'r') as f:
+        lines = f.readlines()
+    renamed = {}
+    for line in lines[1:]: 
+        otype, description = line.split(',')
+        description = description.replace('\n', '') # >> rmv new line char        
+        renamed[otype] = description 
+    
+    # -- produce revised cross-matched classifications -------------------------
+
+    fnames = [f for f in os.listdir(metapath+'spoc/cat/') if 'simbad_raw' in f]
+    fnames.sort()
+
+    for fname in fnames:
+        filo = pd.read_csv(metapath+'spoc/cat/'+fname, delimiter='\s+,')
+        # >> original fname ends with '_simbad_raw.txt'
+        # >> output fname ends with '_simbad.txt'
+        out_f = metapath+'spoc/cat/'+fname[:-8]+'.txt' 
+        with open(out_f, 'w') as f:
+            f.write(align%('TICID','TYPE','MAIN_ID')+'\n')
+
+        for i in range(len(filo)):
+            tic = filo.iloc[i]['TICID']
+            otype = filo.iloc[i]['TYPE']
+            main = filo.iloc[1]['MAIN_ID']
+
+            if type(otype) != np.float:
+                otype = otype.replace('+', '|')
+                otype_list = otype.split('|')
+                otype_list_new = []
+
+                for o in otype_list: # >> loop through object types
+                    if len(o) > 0:
+                        if o[-1] in uncertainty_flags: # >> rmv uncertainty flag
+                            o = o[:-1]
+                        if '(' in o: # >> remove (B)
+                            o = o[:o.index('(')]
+                        if o in list(renamed.keys()):
+                            o = renamed[o]
+                    otype_list_new.append(o)
+                otype = '|'.join(otype_list_new)
+
+            with open(out_f, 'a') as f:
+                f.write(align%(tic, otype, main)+'\n')
+
+        print('Wrote '+out_f)
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -462,6 +573,10 @@ def merge_otype(otype_list):
 
     new_otype_list = []
     for otype in otype_list:
+        if type(otype) == np.float: # >> if nan
+            otype = 'NONE'
+        if otype[0] == '|': 
+            otype[1:]
         if otype in subclasses:
             # >> find parent
             for parent in parents:
@@ -484,9 +599,9 @@ def merge_otype(otype_list):
         else:
             new_otype_list.append(otype)    
 
-            
     otype_list = np.unique(new_otype_list).astype('str')
     otype_list = np.delete(otype_list, np.where(otype_list == ''))
+
     return otype_list
 
 
@@ -641,89 +756,98 @@ def make_flagged_class_list():
 
     return eclip+flagged
 
-def make_true_label_txt(data_dir, sector, rmv_flagged=True,
-                        catalogs=[gcvs, simbad, asassn]):
-    '''Combine Sector*_simbad.txt, Sector*_gcvs.txt, and Sector*_asassn.txt
-    TODO: edit to handle 30-min cadence, etc.
-    TODO: better description of this function'''
-    prefix = data_dir+'databases/Sector'+str(sector)+'_'
-    ticid = np.loadtxt(data_dir+'Sector'+str(sector)+'/all_targets_S%03d'%sector\
-                       +'_v1.txt')[:,0]
-    otypes = {key: np.empty(0) for key in ticid} # >> initialize
+def write_true_label_txt(metapath, rmv_flagged=True,
+                         catalogs=['gcvs', 'simbad', 'asassn'],
+                         align='%-15s,%-50s'):
+    '''Combine sector-*_simbad.txt, sector-*_gcvs.txt, and sector-*_asassn.txt'''
 
-    for catalog in catalogs:
-        otypes = read_otype_txt(otypes, prefix+catalog+'.txt', data_dir, catalog,
-                                rmv_flagged=rmv_flagged)
+    sectors = [f[:10] for f in os.listdir(metapath+'spoc/cat/')]
+    sectors = np.unique(np.array(sectors))
+    
+    for sector in sectors:
+        s = int(sector[7:-1])
+        ticid = np.loadtxt(metapath+'spoc/targ/2m/all_targets_S%03d'%s\
+                           +'_v1.txt')[:,0].astype('int')
+        # otypes = {key: np.empty(0) for key in ticid} # >> initialize
+        otypes = {key: [] for key in ticid} # >> initialize
 
-    # >> save to text file
-    out = prefix+'true_labels.txt'
-    with open(out, 'w') as f:
-        f.write('### Variabiltiy classifications for stars observed with'+\
-                '2-min cadence during Sector '+str(sector)+' ###\n')
-        f.write('### TICID, var_type  ###\n')
-        for i in range(len(ticid)):
-            # >> merge classes
-            otype = merge_otype(otypes[ticid[i]])
-            otype = '|'.join(otype)
-            f.write(str(int(ticid[i]))+','+otype+'\n')    
+        for catalog in catalogs:
+            filo = pd.read_csv(metapath+'spoc/cat/'+sector+catalog+'.txt',
+                               delimiter='\s+,')
+            for i in range(len(filo['TICID'])):
+                otypes[int(filo.iloc[i]['TICID'])].append(filo.iloc[i]['TYPE'])
+
+        # >> save to text file
+        out = metapath+'spoc/cat/'+sector+'true_labels.txt'
+        with open(out, 'w') as f:
+            f.write('### Variability classifications for stars observed with'+\
+                    ' 2-min cadence during '+str(sector)+' ###\n')
+            f.write(align%('TICID','TYPE')+'\n')
+            # f.write('### TICID, var_type  ###\n')
+            for i in range(len(ticid)):
+                # >> merge classes
+                otype = merge_otype(otypes[ticid[i]])
+                otype = '|'.join(otype)
+                f.write(align%(ticid[i],otype)+'\n')
+        print('Wrote '+out)
             
-def read_otype_txt(otypes, otype_txt, data_dir, catalog=None, add_chars=['+', '/'],
-                   uncertainty_flags=[':', '?', '*'], rmv_flagged=True):
+# def read_otype_txt(otypes, otype_txt, data_dir, catalog=None, add_chars=['+', '/'],
+#                    uncertainty_flags=[':', '?', '*'], rmv_flagged=True):
 
-    '''
-    Args:
-    * catalog: either NONE, 'simbad', 'asassn'
-    '''
-    rmv_classes = make_remove_class_list(catalog=catalog, rmv_flagged=rmv_flagged)
+#     '''
+#     Args:
+#     * catalog: either NONE, 'simbad', 'asassn'
+#     '''
+#     rmv_classes = make_remove_class_list(catalog=catalog, rmv_flagged=rmv_flagged)
 
-    otype_dict = {}
-    if type(catalog) != type(None) and catalog not 'gcvs':
-        with open('./docs/var_'+catalog+'.txt', 'r') as f:
-            lines = f.readlines()
-        otype_dict = {}
-        for line in lines[1:]:
-            otype, otype_gcvs = line.split(',')
-            otype_gcvs = otype_gcvs.replace('\n', '')
-            otype_dict[otype] = otype_gcvs
+#     otype_dict = {}
+#     if type(catalog) != type(None) and catalog != 'gcvs':
+#         with open('./docs/var_'+catalog+'.txt', 'r') as f:
+#             lines = f.readlines()
+#         otype_dict = {}
+#         for line in lines[1:]:
+#             otype, otype_gcvs = line.split(',')
+#             otype_gcvs = otype_gcvs.replace('\n', '')
+#             otype_dict[otype] = otype_gcvs
 
-    with open(otype_txt, 'r') as f:
-        lines = f.readlines()
-        for i in range(len(lines)):
-            tic, otype, main_id = lines[i].split(',')
+#     with open(otype_txt, 'r') as f:
+#         lines = f.readlines()
+#         for i in range(len(lines)):
+#             tic, otype, main_id = lines[i].split(',')
 
-            # >> make list of labels
-            for char in add_chars:
-                otype = otype.replace(char, '|')
-            otype_list = otype.split('|')
+#             # >> make list of labels
+#             for char in add_chars:
+#                 otype = otype.replace(char, '|')
+#             otype_list = otype.split('|')
 
-            # >> remove unceratinty flags
-            otype_list_new = []
-            stop=False
-            for o in otype_list:
-                if o == 'UGSU':
-                    stop=True
-                if len(o) > 0 and o != '**':
-                    # >> remove stars that aren't classified
-                    if o[0] == 'V':
-                        o = ''
+#             # >> remove unceratinty flags
+#             otype_list_new = []
+#             stop=False
+#             for o in otype_list:
+#                 if o == 'UGSU':
+#                     stop=True
+#                 if len(o) > 0 and o != '**':
+#                     # >> remove stars that aren't classified
+#                     if o[0] == 'V':
+#                         o = ''
 
-                    else:
-                        # >> remove uncertainty flags
-                        if o[-1] in uncertainty_flags:
-                            o = o[:-1]
+#                     else:
+#                         # >> remove uncertainty flags
+#                         if o[-1] in uncertainty_flags:
+#                             o = o[:-1]
 
-                        # >> convert to GCVS nomenclature
-                        if o in list(otype_dict.keys()): 
-                            o = otype_dict[o]
+#                         # >> convert to GCVS nomenclature
+#                         if o in list(otype_dict.keys()): 
+#                             o = otype_dict[o]
 
-                        # >> remove classes that require external information
-                        if o in rmv_classes:
-                            o = ''
-                    otype_list_new.append(o)
+#                         # >> remove classes that require external information
+#                         if o in rmv_classes:
+#                             o = ''
+#                     otype_list_new.append(o)
 
-            otypes[float(tic)] = np.append(otypes[float(tic)], np.unique(otype_list_new))
+#             otypes[float(tic)] = np.append(otypes[float(tic)], np.unique(otype_list_new))
 
-    return otypes
+#     return otypes
 
 
 
