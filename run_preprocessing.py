@@ -28,9 +28,10 @@ savepath     = '/scratch/echickle/'
 metapath     = '/scratch/data/tess/meta/'
 datatype     = 'SPOC'
 mdumpcsv     = '/scratch/data/tess/meta/Table_of_momentum_dumps.csv'
-sectors      = list(range(1,27))
+sector       = list(range(1,27))
 n_sigma      = 7
 plot         = True
+featgen      = 'CAE'
 
 # >> prepare specified targets (if target_prep = True)
 # targets      = [31850842] # 
@@ -42,23 +43,23 @@ targets      = [38820496, 177309964, 206544316, 234295610, 289840928,
 
 print(sys.argv)
 if len(sys.argv) > 1:
-    sectors = []
+    sector = []
     for arg in sys.argv[1:]:
-        sectors.append('sector-%02d'%int(float(arg)))
+        sector.append('sector-%02d'%int(float(arg)))
         # sectors.append(int(float(arg)))
-print(sectors)
+print(sector)
 
 # ------------------------------------------------------------------------------
 
 # >> Initialize Mergen object
 mg = mergen(datapath, savepath, datatype, metapath=metapath,
-            mdumpcsv=mdumpcsv, sectors=sectors)
+            mdumpcsv=mdumpcsv, sector=sector, featgen=featgen)
 
 # >> Perform preprocessing for all SPOC data 
 if prep_spoc:
-    mg.clean_data() # >> quality mask
-    fe.sigma_clip_data(mg) # >> sigma clip
-    fe.compute_ls_pgram_data(mg, sectors=sectors) # >> compute ls periodogram
+    # mg.clean_data() # >> quality mask
+    # fe.sigma_clip_data(mg) # >> sigma clip
+    # fe.compute_ls_pgram_data(mg, sectors=sectors) # >> compute ls periodogram
     fe.preprocess_lspgram(mg)
     # fe.check_preprocess(mg)
 

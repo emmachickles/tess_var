@@ -16,24 +16,38 @@ savepath = '/scratch/echickle/'
 parampath    = '/home/echickle/work/daehyperparams.txt'
 datatype     = 'SPOC'
 featgen      = 'DAE'
-sectors      = list(range(1,27))
+sector       = list(range(1,27))
 
 # -- initialize Mergen object --------------------------------------------------
-mg = mergen(datapath, savepath, datatype, sectors=sectors,
-            parampath=parampath)
+mg = mergen(datapath, savepath, datatype, sector=sector,
+            parampath=parampath, featgen=featgen)
 
-# >> Load LS periodograms
-fe.load_lspgram(mg)
+fe.load_lspgram_fnames(mg)
+# params = lt.read_hyperparameters_from_txt(mg.parampath)
 
-# >> Feature extraction by deep autoencoder
-mg.generate_dae_features()
+# # !! >>>
+model = lt.load_model(mg.featpath+'model.hdf5')
+params = lt.read_hyperparameters_from_txt(mg.parampath)
+lt.save_autoencoder_products(model, params, mg.batch_fnames, mg.savepath)
+pdb.set_trace()
+# # !! <<<
+
+
+# fe.load_lspgram(mg) # >> load ls periodograms
+
+# mg.generate_features() # >> feature extraction by deep autoencoder
 # mg.load_features("DAE")
 
-mg.run_feature_analysis("DAE")
+# mg.feats = np.load(mg.featpath+'chunk00_bottleneck_train.npy')
+# mg.sector = np.load(mg.datapath+'dae/chunk00_train_sector.npy')
+# mg.objid = np.load(mg.datapath+'dae/chunk00_train_ticid.npy')
+
+
+mg.run_feature_analysis()
 
 # pdb.set_trace()
 # mg.load_lightcurves_local(mg.datapath+'mask/', 1)
-mg.run_vis("DAE")
+mg.run_vis() # !! add classification plots, etc
 
 # mg.load_reconstructions("DAE")
 # mg.produce_ae_visualizations("DAE")
