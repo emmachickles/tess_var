@@ -13,30 +13,30 @@ import feat_eng as fe
 
 datapath = '/scratch/data/tess/lcur/spoc/'
 savepath = '/scratch/echickle/'
+metapath = '/scratch/data/tess/meta/'
 parampath    = '/home/echickle/work/daehyperparams.txt'
 datatype     = 'SPOC'
 featgen      = 'DAE'
 sector       = list(range(1,27))
 
 # -- initialize Mergen object --------------------------------------------------
-mg = mergen(datapath, savepath, datatype, sector=sector,
+mg = mergen(datapath, savepath, datatype, sector=sector, metapath=metapath,
             parampath=parampath, featgen=featgen)
 
 fe.load_lspgram_fnames(mg)
 # params = lt.read_hyperparameters_from_txt(mg.parampath)
 
 # # !! >>>
-model = lt.load_model(mg.featpath+'model.hdf5')
-params = lt.read_hyperparameters_from_txt(mg.parampath)
-lt.save_autoencoder_products(model, params, mg.batch_fnames, mg.savepath)
-pdb.set_trace()
+# model = lt.load_model(mg.featpath+'model.hdf5')
+# params = lt.read_hyperparameters_from_txt(mg.parampath)
+# lt.save_autoencoder_products(model, params, mg.batch_fnames, mg.featpath)
 # # !! <<<
 
 
 # fe.load_lspgram(mg) # >> load ls periodograms
 
 # mg.generate_features() # >> feature extraction by deep autoencoder
-# mg.load_features("DAE")
+mg.load_features()
 
 # mg.feats = np.load(mg.featpath+'chunk00_bottleneck_train.npy')
 # mg.sector = np.load(mg.datapath+'dae/chunk00_train_sector.npy')

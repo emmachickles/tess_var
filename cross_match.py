@@ -51,6 +51,15 @@ from __init__ import *
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
+def query_catalogs(metapath, savepath,  sector='all', query_mast=False,
+                align='%-15s,%-50s,%-30s', catalogs=['simbad', 'asassn']):
+    if 'simbad' in catalogs:
+        query_simbad(metapath, savepath, sector, query_mast, align)
+        correct_simbad_to_vizier(metapath, align=align)
+    if 'gcvs' in catalogs:
+        query_gcvs(metapath, sector)
+    if 'asassn' in catalogs:
+        query_asas_sn(metapath, savepath, sector, align=align)
 def query_simbad(metapath, savepath, sector='all', query_mast=False,
                  align='%-15s,%-50s,%-30s'):
     '''Cross-matches ASAS-SN catalog with TIC catalog based on matching GAIA IDs
@@ -288,7 +297,7 @@ def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
         #                           '-tic_cat.csv')
         sector_data = np.loadtxt(metapath+'spoc/targ/2m/'+\
                                  'all_targets_S%03d'%sector+'_v1.txt')
-        out_fname = metapath+'spoc/cat/sector-%02d'%sector+'_asassn.txt'
+        out_fname = metapath+'spoc/cat/sector-%02d'%sector+'_asassn_raw.txt'
 
         _, comm1, comm2 = np.intersect1d(sector_data[:,0], ticid,
                                          return_indices=True)
@@ -390,11 +399,18 @@ def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
                     plt.savefig(savepath+'cat/asassn_mag_tol'+str(tol)+'.png')
                     plt.close()
 
-def correct_simbad_to_vizier(metapath,
-                             var_simbad='tess_stellar_var/docs/var_simbad.txt',
-                             uncertainty_flags=[':', '?', '*'],
-                             align='%-15s,%-50s,%-30s'):
-    
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# :: Clean object types ::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+# ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+def clean_simbad(metapath,
+                 var_simbad='tess_stellar_var/docs/var_simbad.txt',
+                 uncertainty_flags=[':', '?', '*'],
+                 align='%-15s,%-50s,%-30s'):
+    '''Removes types unrelated to variability, and uses Vizier acronyms instead
+    of SIMBAD acronyms.'''
     # -- create dictionary from Simbad to GCVS labels --------------------------
     with open(var_simbad, 'r') as f:
         lines = f.readlines()
@@ -403,7 +419,10 @@ def correct_simbad_to_vizier(metapath,
         otype, description = line.split(',')
         description = description.replace('\n', '') # >> rmv new line char        
         renamed[otype] = description 
-    
+
+    # -- classes to be removed -------------------------------------------------
+    remove_classes = make_remove_class_list(catalog='simbad')
+
     # -- produce revised cross-matched classifications -------------------------
 
     fnames = [f for f in os.listdir(metapath+'spoc/cat/') if 'simbad_raw' in f]
@@ -420,28 +439,89 @@ def correct_simbad_to_vizier(metapath,
         for i in range(len(filo)):
             tic = filo.iloc[i]['TICID']
             otype = filo.iloc[i]['TYPE']
-            main = filo.iloc[1]['MAIN_ID']
+            main = filo.iloc[i]['MAIN_ID']
 
-            if type(otype) != np.float:
+            # if tic == 24693383: pdb.set_trace()
+
+            if type(otype) == np.float: # >> will skip unmatched TICIDs
+                otype = 'NONE'
+            else:
                 otype = otype.replace('+', '|')
                 otype_list = otype.split('|')
                 otype_list_new = []
-
                 for o in otype_list: # >> loop through object types
                     if len(o) > 0:
-                        if o[-1] in uncertainty_flags: # >> rmv uncertainty flag
+                        while o[-1] in uncertainty_flags: # >> rmv uncertainty flags
                             o = o[:-1]
+                            if len(o) == 0: break
                         if '(' in o: # >> remove (B)
                             o = o[:o.index('(')]
+                        if o in remove_classes:
+                            o = ''
                         if o in list(renamed.keys()):
                             o = renamed[o]
-                    otype_list_new.append(o)
-                otype = '|'.join(otype_list_new)
+                        otype_list_new.append(o)
+                        
+                otype = list(np.unique(otype_list_new))
+                if '' in otype:
+                    otype.pop(otype.index('')) 
+                otype = '|'.join(otype)
+                if otype == '':
+                    otype = 'NONE'
 
             with open(out_f, 'a') as f:
                 f.write(align%(tic, otype, main)+'\n')
 
         print('Wrote '+out_f)
+
+def clean_asassn(metapath,
+                 uncertainty_flags=[':', '?', '*'],
+                 align='%-15s,%-50s,%-30s'):
+
+    # -- classes to be removed -------------------------------------------------
+    remove_classes = make_remove_class_list()
+
+    # -- produce revised cross-matched classifications -------------------------
+
+    fnames = [f for f in os.listdir(metapath+'spoc/cat/') if 'asassn_raw' in f]
+    fnames.sort()
+
+    for fname in fnames:
+        filo = pd.read_csv(metapath+'spoc/cat/'+fname, delimiter='\s+,')
+        # >> original fname ends with '_asassn_raw.txt'
+        # >> output fname ends with '_asassn.txt'
+        out_f = metapath+'spoc/cat/'+fname[:-8]+'.txt' 
+        with open(out_f, 'w') as f:
+            f.write(align%('TICID','TYPE','ASASSN_NAME')+'\n')
+
+        for i in range(len(filo)):
+            tic = filo.iloc[i]['TICID']
+            otype = filo.iloc[i]['TYPE']
+            main = filo.iloc[i]['ASASSN_NAME']
+
+            otype = otype.replace('+', '|')
+            otype_list = otype.split('|')
+            otype_list_new = []
+            for o in otype_list: # >> loop through object types
+                if len(o) > 0:
+                    if o[-1] in uncertainty_flags: # >> rmv uncertainty flag
+                        o = o[:-1]
+                    if o in remove_classes:
+                        o = ''
+                    otype_list_new.append(o)
+                        
+                otype = list(np.unique(otype_list_new))
+                if '' in otype:
+                    otype.pop(otype.index('')) 
+                otype = '|'.join(otype)
+                if otype == '':
+                    otype = 'NONE'
+
+            with open(out_f, 'a') as f:
+                f.write(align%(tic, otype, main)+'\n')
+
+        print('Wrote '+out_f)
+
 
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -601,11 +681,12 @@ def merge_otype(otype_list):
 
     otype_list = np.unique(new_otype_list).astype('str')
     otype_list = np.delete(otype_list, np.where(otype_list == ''))
-
+    if len(new_otype_list) > 1:
+        otype_list = np.delete(otype_list, np.where(otype_list == 'NONE'))
     return otype_list
 
 
-def get_parent_otypes(ticid, otypes, remove_classes=['PM','IR','UV','X']):
+def get_parent_otypes(ticid, otypes):
     '''Finds all the objects with same parent and combines them into the same
     class
     '''
@@ -624,14 +705,13 @@ def get_parent_otypes(ticid, otypes, remove_classes=['PM','IR','UV','X']):
 
         new_otype=[]
         for o in otype:
-            if not o in remove_classes:
-                if o in subclasses:
-                    for parent in parents: # >> find parent otype
-                        if o in parent_dict[parent]:
-                            new_o = parent
-                    new_otype.append(new_o)
-                else:
-                    new_otype.append(o)
+            if o in subclasses:
+                for parent in parents: # >> find parent otype
+                    if o in parent_dict[parent]:
+                        new_o = parent
+                new_otype.append(new_o)
+            else:
+                new_otype.append(o)
 
         # >> remove repeats
         new_otype = np.unique(new_otype)
@@ -656,7 +736,7 @@ def get_parent_otypes(ticid, otypes, remove_classes=['PM','IR','UV','X']):
 
 
 def get_parents_only(class_info, parent_dict=None,
-                     remove_classes=[], remove_flags=[]):
+                     remove_flags=[]):
     '''Finds all the objects with same parent and combines them into the same
     class
     TODO: get rid of this function
@@ -684,16 +764,15 @@ def get_parents_only(class_info, parent_dict=None,
 
         new_otype_list=[]
         for otype in otype_list:
-            if not otype in remove_classes:
-                if otype in subclasses:
-                    # >> find parent
-                    for parent in parents:
-                        if otype in parent_dict[parent]:
-                            new_otype = parent
+            if otype in subclasses:
+                # >> find parent
+                for parent in parents:
+                    if otype in parent_dict[parent]:
+                        new_otype = parent
 
-                    new_otype_list.append(new_otype)
-                else:
-                    new_otype_list.append(otype)
+                new_otype_list.append(new_otype)
+            else:
+                new_otype_list.append(otype)
 
         # >> remove repeats
         new_otype_list = np.unique(new_otype_list)
@@ -725,44 +804,66 @@ def get_parents_only(class_info, parent_dict=None,
     
     return new_class_info
 
-def make_remove_class_list(catalog=None, rmv_flagged=True):
+def make_remove_class_list(catalog='', rmv_flagged=True):
     '''Currently, our pipeline can only do clustering based on photometric data.
     So classes that require spectroscopic data, etc. are removed.'''
-    rmv = ['PM', 'IR', 'nan', 'V', 'V*', 'VAR', 'As', 'SB', 'LM', 'blu', 'EmO',
+    rmv = ['PM', 'IR', 'nan', 'V', 'VAR', 'As', 'SB', 'LM', 'blu', 'EmO',
            'S', 'Rad', 'C', 'mul', 'I', 'IA', 'IB', 'G', 'Sy', 'Sy1', 'Sy2',
-           'QSO']
+           'QSO', '*', 'NIR']
     sequence_descriptors = ['AB', 'HS', 'BS', 'YSO', 'Y', 'sg', 'BD', 's*b',
                             'Y*', 's?r', 's?b', 's*y', 'Y*O', 'RG', 'HB']
 
     if catalog == 'simbad':
         rmv.append('UV') # >> UV refers UV Ceti type variables in GCVS but
                          # >> stars with strong UV radiation in SIMBAD
+        rmv.append('X')
 
     if rmv_flagged:
-        flagged = make_flagged_class_list()
+        flagged = ['Em', 'Pe', 'gam'] # make_flagged_class_list()
     else:
         flagged = []
 
     return rmv+sequence_descriptors+flagged
 
-def make_flagged_class_list():
-
+def make_flagged_eclip_list():
     # >> section 5bc of GCVS classifications: eclipsing systems classified
     # >> based on physical characteristics rather than shape of light curve
     eclip = ['GS', 'PN', 'RS', 'WD', 'WR', 'AR', 'D', 'DM', 'DS', 'DW', 'K',
              'KE', 'KW', 'SD'] 
+    return eclip
 
-    flagged = ['Em', 'Pe', 'gam']
+# def make_remove_class_list(simbad=False, rmv_flagged=True):
+#     '''Currently, our pipeline can only do clustering based on photometric data.
+#     So classes that require spectroscopic data, etc. are removed.'''
+#     rmv = ['PM', 'IR', 'nan', 'V', 'VAR', 'As', 'SB', 'LM', 'blu', 'EmO', 'S',
+#            ]
+#     sequence_descriptors = ['AB', 'HS', 'BS', 'YSO', 'Y', 'sg', 'BD', 's*b']
 
-    return eclip+flagged
+#     if simbad:
+#         rmv.append('UV')
+#         rmv.append('X')
+
+#     if rmv_flagged:
+#         flagged = ['Em', 'Pe', 'gam']
+#     else:
+#         flagged = []
+
+#     return rmv+sequence_descriptors+flagged
 
 def write_true_label_txt(metapath, rmv_flagged=True,
                          catalogs=['gcvs', 'simbad', 'asassn'],
-                         align='%-15s,%-50s'):
-    '''Combine sector-*_simbad.txt, sector-*_gcvs.txt, and sector-*_asassn.txt'''
+                         align='%-15s,%-30s'):
+    '''Combine cat/sector-*_simbad.txt, cat/sector-*_gcvs.txt, and
+    cat/sector-*_asassn.txt, as well as obj/OTYPE.txt '''
 
     sectors = [f[:10] for f in os.listdir(metapath+'spoc/cat/')]
     sectors = np.unique(np.array(sectors))
+
+    obj_names = [f[:-4] for f in os.listdir(metapath+'spoc/obj/')]
+    obj_ids = []
+    for i in range(len(obj_names)):
+        obj_ids.append(np.loadtxt(metapath+'spoc/obj/'+obj_names[i]+'.txt',
+                                  skiprows=1).astype('int'))
     
     for sector in sectors:
         s = int(sector[7:-1])
@@ -775,10 +876,14 @@ def write_true_label_txt(metapath, rmv_flagged=True,
             filo = pd.read_csv(metapath+'spoc/cat/'+sector+catalog+'.txt',
                                delimiter='\s+,')
             for i in range(len(filo['TICID'])):
-                otypes[int(filo.iloc[i]['TICID'])].append(filo.iloc[i]['TYPE'])
+                tic = int(filo.iloc[i]['TICID'])
+                otypes[tic].append(filo.iloc[i]['TYPE'])
+                for j in range(len(obj_names)):
+                    if int(tic) in obj_ids[j]:
+                        otypes[tic].append(obj_names[j])
 
         # >> save to text file
-        out = metapath+'spoc/cat/'+sector+'true_labels.txt'
+        out = metapath+'spoc/true/'+sector+'true_labels.txt'
         with open(out, 'w') as f:
             f.write('### Variability classifications for stars observed with'+\
                     ' 2-min cadence during '+str(sector)+' ###\n')
