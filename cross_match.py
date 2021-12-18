@@ -52,16 +52,16 @@ from __init__ import *
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 def query_catalogs(metapath, savepath,  sector='all', query_mast=False,
-                align='%-15s,%-50s,%-30s', catalogs=['simbad', 'asassn']):
+                   catalogs=['simbad', 'asassn']):
     if 'simbad' in catalogs:
-        query_simbad(metapath, savepath, sector, query_mast, align)
-        correct_simbad_to_vizier(metapath, align=align)
+        query_simbad(metapath, savepath, sector, query_mast)
+        correct_simbad_to_vizier(metapath)
     if 'gcvs' in catalogs:
         query_gcvs(metapath, sector)
     if 'asassn' in catalogs:
-        query_asas_sn(metapath, savepath, sector, align=align)
-def query_simbad(metapath, savepath, sector='all', query_mast=False,
-                 align='%-15s,%-50s,%-30s'):
+        query_asas_sn(metapath, savepath, sector)
+
+def query_simbad(metapath, savepath, sector='all', query_mast=False, sep=','):
     '''Cross-matches ASAS-SN catalog with TIC catalog based on matching GAIA IDs
     * data_dir
     * sector: 'all' or int, currently only handles short-cadence'''
@@ -82,8 +82,8 @@ def query_simbad(metapath, savepath, sector='all', query_mast=False,
         out_f = metapath+'spoc/cat/sector-%02d'%sector+'_simbad_raw.txt'
 
         with open(out_f, 'w') as f:
-            # f.write('TICID'+sep+'TYPE'+sep+'MAIN_ID\n')
-            f.write(align%('TICID', 'TYPE', 'MAIN_ID')+'\n')
+            f.write('TICID'+sep+'TYPE'+sep+'MAIN_ID\n')
+            # f.write(align%('TICID', 'TYPE', 'MAIN_ID')+'\n')
 
         ticid_already_classified = []
         # if not os.path.exists(out_f):
@@ -164,9 +164,9 @@ def query_simbad(metapath, savepath, sector='all', query_mast=False,
                 print('failed :(')
                 res=0 
                 with open(out_f, 'a') as f:
-                    # line = '{}'+sep+sep+'\n'
-                    # f.write(line.format(tic))
-                    f.write(align%(tic, '', '')+'\n')
+                    line = '{}'+sep+'NONE'+sep+'NONE\n'
+                    f.write(line.format(tic))
+                    # f.write(align%(tic, '', '')+'\n')
 
             else:
                 # otypes = res['OTYPES'][0].decode('utf-8')
@@ -175,9 +175,9 @@ def query_simbad(metapath, savepath, sector='all', query_mast=False,
                 main_id = res['MAIN_ID'][0]
 
                 with open(out_f, 'a') as f:
-                    # line = '{}'+sep+'{}'+sep+'{}\n'
-                    # f.write(line.format(tic, otypes, main_id))
-                    f.write(align%(tic, otypes, main_id)+'\n')
+                    line = '{}'+sep+'{}'+sep+'{}\n'
+                    f.write(line.format(tic, otypes, main_id))
+                    # f.write(align%(tic, otypes, main_id)+'\n')
 
             
 def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
@@ -198,7 +198,7 @@ def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
 
     for sector in sectors:
         prefix = data_dir+'databases/Sector'+str(sector)+'_gcvs'
-        out_fname = prefix+'.txt'
+        out_fname = prefix+'_raw.txt'
 
         sector_data = pd.read_csv(data_dir+'Sector'+str(sector)+\
                                   '/Sector'+str(sector)+'tic_cat_all.csv',
@@ -269,13 +269,14 @@ def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
                 plt.close()
                 
 def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
-                  use_sep=False, align='%-15s,%-10s,%-30s'):
+                  use_sep=False):
     '''Cross-matches ASAS-SN catalog with TIC catalog based on matching GAIA IDs
     * data_dir
     * sector: 'all' or int, currently only handles short-cadence
     
     Can read output txt file with
-    pd.read_csv('sector-01_asassn.txt', delimiter='\s+,')
+    np.loadtxt('sector-01_asassn_raw.txt', delimiter=',', dtype='str',
+               skiprows=1)
     '''
     # data = pd.read_csv(data_dir+'asas_sn_database.csv')
     data = pd.read_csv(metapath+'asassn_catalog.csv')
@@ -304,21 +305,21 @@ def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
 
         # >> save cross-matched target in text file
         with open(out_fname, 'w') as f:
-            # f.write('TICID\tTYPE\tASASSN_NAME\n')
-            f.write(align%('TICID', 'TYPE', 'ASASSN_NAME')+'\n')
+            f.write('TICID,TYPE,ASASSN_NAME\n')
+            # f.write(align%('TICID', 'TYPE', 'ASASSN_NAME')+'\n')
             for i in range(len(sector_data)):            
                 if i in comm1:
                     ind = comm2[np.nonzero(comm1 == i)][0]
-                    # f.write(str(int(sector_data[i,0]))+'\t'+\
-                    #         str(data['variable_type'][ind])+'\t'+\
-                    #         str(data['asassn_name'][ind])+'\n')
+                    f.write(str(int(sector_data[i,0]))+','+\
+                            str(data['variable_type'][ind])+','+\
+                            str(data['asassn_name'][ind])+'\n')
 
-                    f.write(align%(int(sector_data[i,0]), \
-                                   data['variable_type'][ind],\
-                                   data['asassn_name'][ind])+'\n')
+                    # f.write(align%(int(sector_data[i,0]), \
+                    #                data['variable_type'][ind],\
+                    #                data['asassn_name'][ind])+'\n')
                 else:
-                    # f.write(str(int(sector_data[i,0]))+'\t\t\n')
-                    f.write(align%(int(sector_data[i,0]),'NONE','NONE')+'\n')
+                    f.write(str(int(sector_data[i,0]))+',NONE,NONE\n')
+                    # f.write(align%(int(sector_data[i,0]),'NONE','NONE')+'\n')
         print('Saved '+out_fname)
 
         if diag_plot:
@@ -407,8 +408,7 @@ def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
 
 def clean_simbad(metapath,
                  var_simbad='tess_stellar_var/docs/var_simbad.txt',
-                 uncertainty_flags=[':', '?', '*'],
-                 align='%-15s,%-50s,%-30s'):
+                 uncertainty_flags=[':', '?', '*']):
     '''Removes types unrelated to variability, and uses Vizier acronyms instead
     of SIMBAD acronyms.'''
     # -- create dictionary from Simbad to GCVS labels --------------------------
@@ -429,23 +429,28 @@ def clean_simbad(metapath,
     fnames.sort()
 
     for fname in fnames:
-        filo = pd.read_csv(metapath+'spoc/cat/'+fname, delimiter='\s+,')
+        # filo = pd.read_csv(metapath+'spoc/cat/'+fname, delimiter='\s+,')
+        filo = np.loadtxt(metapath+'spoc/cat/'+fname, delimiter=',',
+                          dtype='str', skiprows=1)
         # >> original fname ends with '_simbad_raw.txt'
-        # >> output fname ends with '_simbad.txt'
-        out_f = metapath+'spoc/cat/'+fname[:-8]+'.txt' 
+        # >> output fname ends with '_simbad_cln.txt'
+        out_f = metapath+'spoc/cat/'+fname[:-8]+'_cln.txt' 
         with open(out_f, 'w') as f:
-            f.write(align%('TICID','TYPE','MAIN_ID')+'\n')
+            f.write('TICID,TYPE,MAIN_ID'+'\n')
+            # f.write(align%('TICID','TYPE','MAIN_ID')+'\n')
 
         for i in range(len(filo)):
-            tic = filo.iloc[i]['TICID']
-            otype = filo.iloc[i]['TYPE']
-            main = filo.iloc[i]['MAIN_ID']
-
+            tic = filo[i][0]
+            otype = filo[i][1]
+            main = filo[i][2]
+            # tic = filo.iloc[i]['TICID']
+            # otype = filo.iloc[i]['TYPE']
+            # main = filo.iloc[i]['MAIN_ID']
             # if tic == 24693383: pdb.set_trace()
 
             if type(otype) == np.float: # >> will skip unmatched TICIDs
                 otype = 'NONE'
-            else:
+            else: # -- simplify object type names ------------------------------
                 otype = otype.replace('+', '|')
                 otype_list = otype.split('|')
                 otype_list_new = []
@@ -469,14 +474,15 @@ def clean_simbad(metapath,
                 if otype == '':
                     otype = 'NONE'
 
+                # if int(tic) == 243242576: pdb.set_trace()
+
             with open(out_f, 'a') as f:
-                f.write(align%(tic, otype, main)+'\n')
+                f.write(str(tic)+','+str(otype)+','+str(main)+'\n')
+                # f.write(align%(tic, otype, main)+'\n')
 
         print('Wrote '+out_f)
 
-def clean_asassn(metapath,
-                 uncertainty_flags=[':', '?', '*'],
-                 align='%-15s,%-50s,%-30s'):
+def clean_asassn(metapath, uncertainty_flags=[':', '?', '*']):
 
     # -- classes to be removed -------------------------------------------------
     remove_classes = make_remove_class_list()
@@ -487,17 +493,23 @@ def clean_asassn(metapath,
     fnames.sort()
 
     for fname in fnames:
-        filo = pd.read_csv(metapath+'spoc/cat/'+fname, delimiter='\s+,')
+        filo = np.loadtxt(metapath+'spoc/cat/'+fname, delimiter=',', dtype='str',
+                          skiprows=1)
+        # filo = pd.read_csv(metapath+'spoc/cat/'+fname, delimiter='\s+,')
         # >> original fname ends with '_asassn_raw.txt'
         # >> output fname ends with '_asassn.txt'
-        out_f = metapath+'spoc/cat/'+fname[:-8]+'.txt' 
+        out_f = metapath+'spoc/cat/'+fname[:-8]+'_cln.txt' 
         with open(out_f, 'w') as f:
-            f.write(align%('TICID','TYPE','ASASSN_NAME')+'\n')
+            f.write('TICID,TYPE,ASASSN_NAME\n')
+            # f.write(align%('TICID','TYPE','ASASSN_NAME')+'\n')
 
         for i in range(len(filo)):
-            tic = filo.iloc[i]['TICID']
-            otype = filo.iloc[i]['TYPE']
-            main = filo.iloc[i]['ASASSN_NAME']
+            tic = filo[i][0]
+            otype = filo[i][1]
+            main = filo[i][2]
+            # tic = filo.iloc[i]['TICID']
+            # otype = filo.iloc[i]['TYPE']
+            # main = filo.iloc[i]['ASASSN_NAME']
 
             otype = otype.replace('+', '|')
             otype_list = otype.split('|')
@@ -518,7 +530,8 @@ def clean_asassn(metapath,
                     otype = 'NONE'
 
             with open(out_f, 'a') as f:
-                f.write(align%(tic, otype, main)+'\n')
+                f.write(str(tic)+','+str(otype)+','+str(main)+'\n')
+                # f.write(align%(tic, otype, main)+'\n')
 
         print('Wrote '+out_f)
 
@@ -585,21 +598,22 @@ def make_parent_dict():
     return d, parents, subclasses
 
 def make_variability_tree():
+    # >> renamed 'INT,IT' type as 'INTIT' since I used ',' as txt delimiter
     var_d = {'eruptive':
-         ['Fl', 'BE', 'FU', 'GCAS', 'I', 'IA', 'IB', 'IN', 'INA', 'INB', 'INT,IT',
-          'IN(YY)', 'IS', 'ISA', 'ISB', 'RCB', 'RS', 'SDOR', 'UV', 'UV', 'UVN',
-          'WR', 'INTIT', 'GCAS'],
+         ['Fl', 'BE', 'FU', 'GCAS', 'I', 'IA', 'IB', 'IN', 'INA', 'INB', 'INTIT',
+          'IN(YY)', 'IS', 'ISA', 'ISB', 'RCB', 'RS', 'SDOR', 'UV', 'UVN',
+          'WR', 'GCAS', 'out', 'Ae', 'Er'],
          'pulsating':
              ['Pu', 'ACYG', 'BCEP', 'BCEPS', 'BLBOO', 'CEP', 'CEP(B)', 'CW', 'CWA',
               'CWB', 'DCEP', 'DCEPS', 'DSCT', 'DSCTC', 'GDOR', 'L', 'LB', 'LC',
               'LPB', 'M', 'PVTEL', 'RPHS', 'RR', 'RR(B)', 'RRAB', 'RRC', 'RV',
               'RVA', 'RVB', 'SR', 'SRA', 'SRB' 'SRC', 'SRD', 'SRS', 'SXPHE',
-              'ZZ', 'ZZA', 'ZZB', 'ZZO'],
+              'ZZ', 'ZZA', 'ZZB', 'ZZO', 'SX'],
          'rotating': ['ACV', 'ACVO', 'BY', 'ELL', 'FKCOM', 'PSR',
-                      'R', 'SXARI'],
+                      'R', 'SXARI', 'ROT', 'CROT'],
          'cataclysmic':
              ['N', 'NA', 'NB', 'NC', 'NL', 'NR', 'SN', 'SNI', 'SNII', 'UG',
-              'UGSS', 'UGSU', 'UGZ', 'ZAND', 'DQ'],
+              'UGSS', 'UGSU', 'UGZ', 'ZAND', 'DQ', 'CV'],
          'eclipsing':
              ['E', 'EA', 'EB', 'EP', 'EW', 'GS', 'PN', 'RS', 'WD', 'WR', 'AR',
               'D', 'DM', 'DS', 'DW', 'K', 'KE', 'KW', 'SD'],
@@ -646,7 +660,7 @@ def make_redundant_otype_dict():
     return d, parents, subclasses
 
 
-def merge_otype(otype_list):
+def merge_otype(otype_list, debug=True):
 
     # >> merge classes
     parent_dict, parents, subclasses = make_parent_dict()
@@ -679,6 +693,7 @@ def merge_otype(otype_list):
         else:
             new_otype_list.append(otype)    
 
+    if debug: pdb.set_trace()
     otype_list = np.unique(new_otype_list).astype('str')
     otype_list = np.delete(otype_list, np.where(otype_list == ''))
     if len(new_otype_list) > 1:
@@ -809,21 +824,27 @@ def make_remove_class_list(catalog='', rmv_flagged=True):
     So classes that require spectroscopic data, etc. are removed.'''
     rmv = ['PM', 'IR', 'nan', 'V', 'VAR', 'As', 'SB', 'LM', 'blu', 'EmO',
            'S', 'Rad', 'C', 'mul', 'I', 'IA', 'IB', 'G', 'Sy', 'Sy1', 'Sy2',
-           'QSO', '*', 'NIR']
+           'QSO', '*', 'NIR', 'Ir', 'smm', 'mR', 'cm', 'mm', 'HI', 'rB', 'Mas',
+           'FIR', 'MIR', 'NIR', 'UX', 'ULX', 'IR\t', 'gB', 'S', 'HV', 'HII']
     sequence_descriptors = ['AB', 'HS', 'BS', 'YSO', 'Y', 'sg', 'BD', 's*b',
-                            'Y*', 's?r', 's?b', 's*y', 'Y*O', 'RG', 'HB']
+                            'Y*', 's?r', 's?b', 's*y', 'Y*O', 'RG', 'HB',
+                            's*r', 'WD', 'pA', 'LM', 'OH', 's?y', 'cor', 'bluOB']
+    non_star = ['AGN', 'PoC', 'RNe', 'RB', 'OpC', 'LSB', 'ISM', 'GiP', 'GiC' , 'EmG',
+                'DNe', 'ClG', 'Bla', 'BH']
+    not_descriptive = ['ev', 'W', 'RRD', 'RO', 'Q', 'HX', 'HH', 'HADS', 'Bz', 'BL', 'B']
 
     if catalog == 'simbad':
         rmv.append('UV') # >> UV refers UV Ceti type variables in GCVS but
                          # >> stars with strong UV radiation in SIMBAD
         rmv.append('X')
+        rmv.append('N') # >> refers to nova in GCVS but neutron stars in SIMBAD
 
     if rmv_flagged:
         flagged = ['Em', 'Pe', 'gam'] # make_flagged_class_list()
     else:
         flagged = []
 
-    return rmv+sequence_descriptors+flagged
+    return rmv+sequence_descriptors+flagged+non_star+not_descriptive
 
 def make_flagged_eclip_list():
     # >> section 5bc of GCVS classifications: eclipsing systems classified
@@ -851,10 +872,8 @@ def make_flagged_eclip_list():
 #     return rmv+sequence_descriptors+flagged
 
 def write_true_label_txt(metapath, rmv_flagged=True,
-                         catalogs=['gcvs', 'simbad', 'asassn'],
-                         align='%-15s,%-30s'):
-    '''Combine cat/sector-*_simbad.txt, cat/sector-*_gcvs.txt, and
-    cat/sector-*_asassn.txt, as well as obj/OTYPE.txt '''
+                         catalogs=['gcvs', 'simbad', 'asassn']):
+    '''Combine cat/*_cln.txt, as well as obj/OTYPE.txt '''
 
     sectors = [f[:10] for f in os.listdir(metapath+'spoc/cat/')]
     sectors = np.unique(np.array(sectors))
@@ -873,11 +892,13 @@ def write_true_label_txt(metapath, rmv_flagged=True,
         otypes = {key: [] for key in ticid} # >> initialize
 
         for catalog in catalogs:
-            filo = pd.read_csv(metapath+'spoc/cat/'+sector+catalog+'.txt',
-                               delimiter='\s+,')
-            for i in range(len(filo['TICID'])):
-                tic = int(filo.iloc[i]['TICID'])
-                otypes[tic].append(filo.iloc[i]['TYPE'])
+            filo = np.loadtxt(metapath+'spoc/cat/'+sector+catalog+'_cln.txt',
+                              delimiter=',', dtype='str', skiprows=1)
+            # filo = pd.read_csv(metapath+'spoc/cat/'+sector+catalog+'.txt',
+            #                    delimiter='\s+,')
+            for i in range(len(filo)):
+                tic = int(filo[i][0])
+                otypes[tic].extend(filo[i][1].split('|'))
                 for j in range(len(obj_names)):
                     if int(tic) in obj_ids[j]:
                         otypes[tic].append(obj_names[j])
@@ -887,13 +908,20 @@ def write_true_label_txt(metapath, rmv_flagged=True,
         with open(out, 'w') as f:
             f.write('### Variability classifications for stars observed with'+\
                     ' 2-min cadence during '+str(sector)+' ###\n')
-            f.write(align%('TICID','TYPE')+'\n')
-            # f.write('### TICID, var_type  ###\n')
+            f.write('TICID,TYPE\n')
+            # f.write(align%('TICID','TYPE')+'\n')
             for i in range(len(ticid)):
+                debug=False
+                # if int(ticid[i]) == 105769104:
+                #     debug=True
+                # else:
+                #     debug=False
+                
                 # >> merge classes
-                otype = merge_otype(otypes[ticid[i]])
+                otype = merge_otype(otypes[ticid[i]], debug=debug)
                 otype = '|'.join(otype)
-                f.write(align%(ticid[i],otype)+'\n')
+                f.write(str(ticid[i])+','+str(otype)+'\n')
+                # f.write(align%(ticid[i],otype)+'\n')
         print('Wrote '+out)
             
 # def read_otype_txt(otypes, otype_txt, data_dir, catalog=None, add_chars=['+', '/'],
