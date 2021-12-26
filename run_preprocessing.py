@@ -49,6 +49,7 @@ else :
     sectors = []
     for s in range(1,27):
         sectors.append('sector-%02d'%int(float(s)))        
+print('Preprocessing the following sectors: ')
 print(sectors)
 
 # ------------------------------------------------------------------------------
@@ -63,15 +64,16 @@ if prep_spoc:
     # fe.sigma_clip_data(mg) # >> sigma clip
 
     # >> short timescale (1 month)
-    fe.compute_lspgram_sing_sector(mg, sectors=sectors) # >> compute ls periodogram
-    fe.preprocess_lspgram(mg, lspmpath='lspm-1sector/')
+    # fe.compute_lspgram_sing_sector(mg, sectors=sectors) # >> compute ls periodogram
+    # fe.preprocess_lspgram(mg, lspmpath='lspm-1sector/')
 
-    # >> medium timescale (6 months)
+    # >> medium timescale (6 months, 19366 targets in S1-26 2-min)
+    fe.compute_lspgram_mult_sector(mg, sectors=sectors, n_sector=6)
+    fe.preprocess_lspgram(mg, lspmpath='lspm-6sector/', n_chunk=2)
 
-    # >> long timescale (12 months)
-
-    pdb.set_trace()
-    # fe.check_preprocess(mg)
+    # >> long timescale (12 months, 3000 targets in S1-26 2-min)
+    fe.compute_lspgram_mult_sector(mg, sectors=sectors, n_sector=13)
+    fe.preprocess_lspgram(mg, lspmpath='lspm-13sector/', n_chunk=2)
 
 # >> Alternatively perform quality and sigma-clip masking for a single target
 if target_prep:

@@ -27,20 +27,19 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
             parampath=parampath, featgen=featgen, clstrmeth=clstrmeth,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
-fe.load_lspgram_fnames(mg)
+fe.load_lspgram_fnames(mg, lspmpath='lspm-1sector/')
 
-# # !! >>>
-# params = lt.read_hyperparameters_from_txt(mg.parampath)
-# model = lt.load_model(mg.featpath+'model.hdf5')
-# params = lt.read_hyperparameters_from_txt(mg.parampath)
-# lt.save_autoencoder_products(model, params, mg.batch_fnames, mg.featpath)
-# # !! <<<
+# !! >>>
+params = lt.read_hyperparameters_from_txt(mg.parampath)
+model = lt.load_model(mg.savepath+'model/model.hdf5')
+lt.save_autoencoder_products(model, params, mg.batch_fnames, mg.savepath+'model/')
+# !! <<<
 
-# mg.generate_features() # >> feature extraction by deep autoencoder
-mg.load_features()
+mg.generate_features() # >> feature extraction by deep autoencoder
+# mg.load_features()
 
-# mg.generate_clusters()
-mg.load_gmm_clusters()
+mg.generate_clusters()
+# mg.load_gmm_clusters()
 mg.load_nvlty()
 
 mg.load_true_otypes()

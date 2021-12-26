@@ -26,6 +26,6 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
             parampath=parampath, featgen=featgen, clstrmeth=clstrmeth,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
-fe.load_lspgram_fnames(mg)
+fe.load_lspgram_fnames(mg, lspmpath='lspm-1sector/')
 mg.generate_features() # >> feature extraction by conv autoencoder
 mg.generate_clusters()
