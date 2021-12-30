@@ -11,8 +11,12 @@ import feat_eng as fe
 
 # -- inputs --------------------------------------------------------------------
 
+# >> timescale : int, number of sectors (1, 6, 13)
+timescale    = 1
+savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
+dt.create_dir(savepath)
+
 datapath     = '/scratch/data/tess/lcur/spoc/'
-savepath     = '/scratch/echickle/'
 metapath     = '/scratch/data/tess/meta/'
 parampath    = '/home/echickle/work/caehyperparams.txt'
 datatype     = 'SPOC'
@@ -26,6 +30,6 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
             parampath=parampath, featgen=featgen, clstrmeth=clstrmeth,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
-fe.load_lspgram_fnames(mg, lspmpath='lspm-1sector/')
+fe.load_lspgram_fnames(mg, timescale=timescale)
 mg.generate_features() # >> feature extraction by conv autoencoder
 mg.generate_clusters()

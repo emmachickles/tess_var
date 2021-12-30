@@ -293,7 +293,7 @@ def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2,
 # -- LS Periodograms -----------------------------------------------------------
 
 def compute_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
-                                n0=5):
+                                n0=8, overwrite=False):
     """Compute LS-periodograms with a baseline of a single observational sector 
     (~27 days). Periodograms for stars that are observed in multiple sectors are
     averaged for each frequency bin.
@@ -332,7 +332,7 @@ def compute_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
     T_avg = np.mean(T) # >> average baseline
 
     # >> frequency grid:
-    min_freq = 1/T_avg
+    min_freq = 1/(2*T_avg)
     max_freq = f_ny/2
     df = 1/(n0*T_avg)
 
@@ -342,7 +342,9 @@ def compute_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
     mult_obs = uniq_ticid[np.nonzero(counts>1)]
     
     # -- set up output directories ---------------------------------------------
-    savepath = mg.savepath+'lspm-1sector/'
+
+    dt.create_dir(mg.savepath+'timescale-1sector/')
+    savepath = mg.savepath+'timescale-1sector/lspm/'
     dt.create_dir(savepath)
     dt.create_dir(savepath+'preprocess/')
     dt.create_dir(savepath+'avg/')
@@ -365,7 +367,7 @@ def compute_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
         else:
             plot_pgram = False
 
-        if os.path.exists(lspmpath+str(ticid_lc)+'.fits'):
+        if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits'):
             pass
         else:
             compute_ls_pgram(mg, lcfiles, plot=plot_pgram, sector=sector,
@@ -373,7 +375,7 @@ def compute_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
                              comp_meth='avg', savepath=savepath, lspmpath=lspmpath)
 
 def compute_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
-                                n0=5, n_sector=6):
+                                n0=8, n_sector=6, overwrite=False):
 
     if len(sectors) == 0:
         sectors = os.listdir(mg.datapath+'clip/') # >> sigma clipped light
@@ -418,12 +420,16 @@ def compute_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
     T_avg = np.mean(T) # >> average baseline
 
     # >> frequency grid:
-    min_freq = 1/T_avg
+    min_freq = 1/(2*T_avg)
     max_freq = f_ny/2
     df = 1/(n0*T_avg)
 
+    print('Min period: '+str(np.round(1/max_freq * 1440)) + ' minutes')
+    print('Max period: '+str(np.round(1/min_freq)) + ' days')
+
     # -- set up output directories ---------------------------------------------
-    savepath = mg.savepath+'lspm-'+str(n_sector)+'sector/'
+    dt.create_dir(mg.savepath+'timescale-'+str(n_sector)+'sector/')
+    savepath = mg.savepath+'timescale-'+str(n_sector)+'sector/lspm/'
     dt.create_dir(savepath)
     dt.create_dir(savepath+'preprocess/')
     dt.create_dir(savepath+'concat/')
@@ -438,18 +444,20 @@ def compute_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
 
         if i % plot_int == 0:
             print('Computing LS periodogram of light curve '+str(i)+'/'+\
-                  str(len(fnames)))
+                  str(len(ticid)))
             if plot: plot_pgram = True
         else:
             plot_pgram = False
 
-        # if os.path.exists(lspmpath+str(ticid_lc)+'.fits'):
-        #     pass
-        # else:
-        compute_ls_pgram(mg, lcfiles, plot=plot_pgram, sector=sector,
-                         min_freq=min_freq, max_freq=max_freq, df=df, 
-                         comp_meth='concat', savepath=savepath, 
-                         lspmpath=lspmpath)
+        # !! tmp
+        if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits') \
+           and not plot_pgram:
+            pass
+        else:
+            compute_ls_pgram(mg, lcfiles, plot=plot_pgram, sector=sector,
+                             min_freq=min_freq, max_freq=max_freq, df=df, 
+                             comp_meth='concat', savepath=savepath, 
+                             lspmpath=lspmpath)
 
 def compute_ls_pgram(mg, lcfiles, plot=False, sector='', 
                      max_freq=1/(8/1440.), min_freq=1/27.,
@@ -520,7 +528,7 @@ def compute_ls_pgram(mg, lcfiles, plot=False, sector='',
         ax[2].set_xlabel('Period (days)')
         ax[2].set_yscale('log')
         ax[2].set_ylabel('Power')
-        ax[1].set_yscale('log')
+        ax[2].set_yscale('log')
         fig.tight_layout()
         fname = savepath+'preprocess/preprocess_TIC'+str(int(ticid))+'.png'
         fig.savefig(fname)
@@ -580,19 +588,20 @@ def compute_ls_pgram(mg, lcfiles, plot=False, sector='',
         plt.close(fig)
 
 def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
-                       lspmpath='lspm-1sector/'):
+                       timescale=1):
 
+    lspmpath = 'lspm-'+str(timescale)+'sector/'
     datapath = mg.datapath+'ae-'+lspmpath
     dt.create_dir(datapath)
 
     fnames = [mg.datapath+lspmpath+f for f in os.listdir(mg.datapath+lspmpath)]
     ticid = [f[:-5] for f in os.listdir(mg.datapath+lspmpath)]
 
-    savepath = mg.savepath+lspmpath+'normalize/'
+    savepath = mg.savepath+'timescale-'+str(timescale)+'sector/normalize/'
     dt.create_dir(savepath)
 
     # >> save LS periodograms in chunks
-    for n in range(n_chunk):
+    for n in range(n_chunk): 
         if n == n_chunk-1:
             fnames_chunk = fnames[n*(len(fnames)//n_chunk):]
         else:
@@ -623,7 +632,9 @@ def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
 
                 ax[1].set_title('Normalized LS periodogram for TIC '+\
                                 str(tic))
-                ax[1].plot(1/freq, dt.standardize([hdul[1].data['LSPM']])[0])
+                # ax[1].plot(1/freq, dt.standardize([hdul[1].data['LSPM']])[0])
+                ax[1].plot(1/freq, dt.normalize_minmax([hdul[1].data['LSPM']],
+                            new_min=-1.)[0])
                 ax[1].set_xlabel('Period (days)')
                 ax[1].set_ylabel('Power')
                 fig.tight_layout()
@@ -638,10 +649,10 @@ def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
         sector, ticid = np.array(sector), np.array(ticid)
 
         # >> standardize # >> drives most values negative
-        lspgram = dt.standardize(lspgram, ax=1)
+        # lspgram = dt.standardize(lspgram, ax=1)
 
         # >> normalize
-        # lspgram = dt.normalize_minmax(lspgram)
+        lspgram = dt.normalize_minmax(lspgram, new_min=-1., new_max=1.)
 
         # >> save
         np.save(datapath+'chunk%02d'%n+'_train_lspm.npy', lspgram)
@@ -649,8 +660,8 @@ def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
         np.save(datapath+'chunk%02d'%n+'_train_ticid.npy', ticid)
         np.save(datapath+'chunk%02d'%n+'_train_freq.npy', freq)
 
-def load_lspgram_fnames(mg, lspmpath='lspm-1sector/'):
-    path = mg.datapath+'ae-'+lspmpath
+def load_lspgram_fnames(mg, timescale=1):
+    path = mg.datapath+'ae-lspm-'+str(timescale)+'sector/'
     n_chunks = max([int(f[5:7]) for f in os.listdir(path) if 'chunk' in f])+1
     
     fnames, mg.sector, mg.objid = [], [], []
@@ -696,28 +707,31 @@ def load_lspgram(mg):
             
 # -- Phase Curve Features ------------------------------------------------------
 
-def create_phase_curve_feats(time, flux, ids, n_bins=100, n_freq=500000, 
+def create_phase_curve_feats(ticid, time=None, flux=None, n_bins=2000,
+                             n_freq=500000, 
                              n_terms=1, n_freq0=10000, n_terms0=1,
                              sector=1, output_dir='./', plot=False,
-                         
+                             report_time=False):
 
-    report_time=False):
+    dt.create_dir(output_dir+'lspm-feat/')
 
     # >> textfile showing TICIDs where phase curve features were computed
-    fname = output_dir+'Sector'+str(sector)+'_phase_curve_feat_gen.txt'
+    fname = output_dir+'lspm-feat/phase_curve_feat_gen.txt'
     with open(fname, 'w') as f: 
         f.write('')
 
     all_feats = []
     # >> calculate phase curves
-    for i in range(len(flux)):
+    for i in range(len(ticid)):
 
         if report_time: # >> restart timer
             start = datetime.now()
 
         # >> check if light curve is periodic
-        res = mask_harmonics(time, flux[i], n_freq=n_freq0, n_terms=n_terms0,
-                             report_time=report_time, plot=plot, output_dir=output_dir,
+        res = mask_harmonics(frequency=frequency, power=power, 
+                             n_freq=n_freq0, n_terms=n_terms0,
+                             report_time=report_time, plot=plot,
+                             output_dir=output_dir,
                              prefix='TIC'+str(ids[i]))
 
         # >> calculate phase curve features
@@ -741,7 +755,10 @@ def create_phase_curve_feats(time, flux, ids, n_bins=100, n_freq=500000,
     np.savetxt(output_dir+'Sector'+str(sector)+'_phase_curve_feat.txt',
                np.array(all_feats))
 
-def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e-2,
+def mask_harmonics(t=None, y=None, frequency=None, power=None,
+                   datapath=None, ticid=None,
+                   timescale=1, n_freq=10000, n_terms=1,
+                   thresh_min=5e-3, thresh_max=5e-2,
                    tmin=0.05, tmax=2, har_window=100, kernel_size=25,
                    report_time=True, plot=True, output_dir='', prefix=''):
     ''' Mask harmonics of the largest power to determine whether it is
@@ -765,12 +782,19 @@ def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e
         start = datetime.now()
 
     # -- calculate a sparse periodogram ----------------------------------------
-    frequency = np.linspace(1./tmax, 1./tmin, n_freq)
+    if type(frequency) == type(None):
+        hdul = fits.open(datapath+'lspm-'+str(timescale)+'sector'+\
+                         str(int(ticid))+'.fits')
+        frequency = hdul[1].data['FREQ']
+        power = hdul[1].data['LSPM']
+    else:
 
-    power = LombScargle(t, y, nterms=n_terms).power(frequency)    
-    max_pow = np.max(power)
-    max_ind = np.argmax(power)
-    max_freq = frequency[max_ind] 
+        frequency = np.linspace(1./tmax, 1./tmin, n_freq)
+
+        power = LombScargle(t, y, nterms=n_terms).power(frequency)    
+        max_pow = np.max(power)
+        max_ind = np.argmax(power)
+        max_freq = frequency[max_ind] 
     
     # -- mask harmonics --------------------------------------------------------
     factors = np.arange(2,6)
@@ -811,7 +835,6 @@ def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e
     inds = np.append(inds, window)
 
     # -- plot ------------------------------------------------------------------
-
     if report_time:
         end = datetime.now()
         dur_sec = (end-start).total_seconds()
@@ -820,6 +843,23 @@ def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e
     if plot:
         fig, ax = plt.subplots(2, figsize=(8, 2*3))
         ax[0].set_title('Sparse frequency grid (nfreq0='+str(n_freq)+')') 
+        if type(t) == type(None):
+            fnames = []
+            for s in os.listdir(datapath+'clip/'):
+                fnames.extend([datapath+'clip/'+s+f for f in \
+                               os.listdir(datapath+'clip/'+s) \
+                               if str(ticid) in f])
+            t, y = [], []
+            for fname in fnames:
+                data, meta = dt.open_fits(fname=lcfile)                
+                t.append(data['TIME'])
+                y.append(data['FLUX'])
+            if timescale == 1:
+                t, y = np.concatenate(t), np.concatenate(y)
+            else:
+                t = np.concatenate(t[:timescale])
+                y = np.concatenate(y[:timescale])
+            
         ax[0].plot(t, y, '.k', ms=1)
         ax[0].set_xlabel('Time [BJD - 2457000]')
         ax[0].set_ylabel('Relative Flux')
@@ -854,9 +894,9 @@ def mask_harmonics(t, y, n_freq=10000, n_terms=1, thresh_min=5e-3, thresh_max=5e
                        fontsize='small')
         
         fig.tight_layout()
-        fig.savefig(output_dir+prefix+'nfreq'+str(n_freq)+'-nterms'+\
-                    str(n_terms)+'sparse_pgram.png')
-        print('Saved '+output_dir+prefix+'sparse_pgram.png')
+        out_f = output_dir+'harmonics_TIC'+str(int(ticid))+'.png'
+        fig.savefig(out_f)
+        print('Saved '+out_f)
         plt.close(fig)
 
     # -- return result ---------------------------------------------------------

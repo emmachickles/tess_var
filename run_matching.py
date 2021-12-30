@@ -25,9 +25,21 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath, featgen=featgen)
 # mg.initiate_meta()
 # cm.query_asas_sn(mg.metapath, mg.savepath)
 # cm.query_simbad(mg.metapath, mg.savepath)
+cm.query_gcvs(mg.metapath, mg.savepath)
+
+pdb.set_trace()
+# cm.get_otypes(mg.metapath+'spoc/cat/', string='_raw', output_dir=mg.savepath)
+
 cm.clean_simbad(mg.metapath) 
-# cm.clean_asassn(mg.metapath)
+cm.clean_asassn(mg.metapath)
+cm.get_otypes(mg.metapath+'spoc/cat/', string='_cln', output_dir=mg.savepath)
 cm.write_true_label_txt(mg.metapath, catalogs=['simbad', 'asassn'])
+cm.get_otypes(mg.metapath+'spoc/true/', string='_true', output_dir=mg.savepath,
+              skiprows=2)
+cm.get_chan_merged_otypes(mg.metapath)
+cm.get_otypes(mg.metapath+'spoc/', string='_S1_26', output_dir=mg.savepath,
+              skiprows=2)
+
 fe.load_lspgram_fnames(mg)
 mg.load_true_otypes()
 otypes_all = np.unique(mg.totype)

@@ -30,3 +30,6 @@ XB,X
 LXB,X
 HXB,X
 BLL,BLLAC
+N,Neu
+X,Xem
+UV,UVem

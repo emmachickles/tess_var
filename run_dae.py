@@ -11,8 +11,12 @@ import feat_eng as fe
 
 # -- inputs --------------------------------------------------------------------
 
+# >> timescale : int, number of sectors (1, 6, 13)
+timescale    = 1
+savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
+dt.create_dir(savepath)
+
 datapath = '/scratch/data/tess/lcur/spoc/'
-savepath = '/scratch/echickle/'
 metapath = '/scratch/data/tess/meta/'
 parampath    = '/home/echickle/work/daehyperparams.txt'
 datatype     = 'SPOC'
@@ -27,18 +31,22 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
             parampath=parampath, featgen=featgen, clstrmeth=clstrmeth,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
-fe.load_lspgram_fnames(mg, lspmpath='lspm-1sector/')
-
-# !! >>>
-params = lt.read_hyperparameters_from_txt(mg.parampath)
-model = lt.load_model(mg.savepath+'model/model.hdf5')
-lt.save_autoencoder_products(model, params, mg.batch_fnames, mg.savepath+'model/')
-# !! <<<
+fe.load_lspgram_fnames(mg, timescale=timescale)
 
 mg.generate_features() # >> feature extraction by deep autoencoder
+# lt.save_autoencoder_products(parampath=mg.parampath,
+#                              output_dir=mg.featpath+'model/',
+#                              batch_fnames=mg.batch_fnames)
+# pdb.set_trace()
 # mg.load_features()
 
+mg.generate_tsne()
+# mg.load_tsne()
+
+
 mg.generate_clusters()
+pdb.set_trace()
+
 # mg.load_gmm_clusters()
 mg.load_nvlty()
 

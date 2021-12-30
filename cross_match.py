@@ -180,16 +180,37 @@ def query_simbad(metapath, savepath, sector='all', query_mast=False, sep=','):
                     # f.write(align%(tic, otypes, main_id)+'\n')
 
             
-def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
+def query_gcvs(metapath, savepath, sector='all', tol=0.1, diag_plot=True):
     '''Cross-matches GCVS catalog with TIC catalog.
     * data_dir
     * sector: 'all' or int, currently only handles short-cadence
     * tol: maximum separation of TIC target and GCVS target (in arcsec)
     '''
-    data = pd.read_csv(data_dir+'gcvs_database.csv')
-    print('Loaded gcvs_database.csv')
-    data_coords = coord.SkyCoord(data['RAJ2000'], data['DEJ2000'],
-                                 unit=(u.hourangle, u.deg))
+    # data = pd.read_csv(metapath+'gcvs5.txt', delimiter='|')
+
+    data_coords = []
+    gcvs_id = []
+    vartype = []
+    mag = []
+    with open(metapath+'gcvs5.txt', 'r') as f:
+        lines = f.readlines()
+        for i in range(len(lines)):
+            if i % 500 == 0: print(str(i)+' / '+str(len(lines)))
+            line = lines[i]
+            radec = line.split('|')[2].split(' ')
+            while '' in radec:
+                radec.remove('')
+            if len(radec) != 0:
+                ra = radec[0][:2]+' '+radec[0][2:4]+' '+radec[0][4:]
+                dec = radec[1][:3]+' '+radec[1][3:5]+' '+radec[1][5:]
+                data_coords.append(coord.SkyCoord(ra, dec,
+                                                  unit=(u.hourangle, u.deg)))
+                gcvs_id.append(line.split('|')[1])
+                vartype.append(line.split('|')[3].split(' ')[0])
+                obj_mag = line.split('|')[4].split(' ')
+                while '' in obj_mag:
+                    obj_mag.remove('')
+                mag.append(obj_mag)
 
     if sector=='all':
         sectors = list(range(1,27))
@@ -197,37 +218,39 @@ def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
         sectors=[sector]
 
     for sector in sectors:
-        prefix = data_dir+'databases/Sector'+str(sector)+'_gcvs'
-        out_fname = prefix+'_raw.txt'
-
-        sector_data = pd.read_csv(data_dir+'Sector'+str(sector)+\
-                                  '/Sector'+str(sector)+'tic_cat_all.csv',
-                                  index_col=False)
+        out_fname = metapath+'spoc/cat/sector-%02d'%sector+'_gcvs_raw.txt'
+        sector_data = np.loadtxt(metapath+'spoc/targ/2m/'+\
+                                 'all_targets_S%03d'%sector+'_v1.txt')
         print('Loaded Sector'+str(sector)+'tic_cat_all.csv')
 
         # >> find GCVS target closest to each TIC target
-        if os.path.exists(prefix+'_sep.txt'):
-            sep_arcsec = np.loadtxt(prefix+'_sep.txt')
-            min_inds = np.loadtxt(prefix+'_sep_inds.txt').astype('int')
-            print('Loaded '+prefix+'_sep.txt')
+        if os.path.exists(metapath+'sector-%02d'%sector+'_gcvs_sep.txt'):
+            sep_arcsec = np.loadtxt(metapath+'sector-%02d'%sector+\
+                                    '_gcvs_sep.txt')
+            min_inds = np.loadtxt(metapath+'sector-%02d'%sector+\
+                                  '_gcvs_sep_inds.txt').astype('int')
+            print('Loaded '+metapath+'sector-%02d'%sector+'_gcvs_sep.txt')
         else:
             min_sep = []
             min_inds = []
             for i in range(len(sector_data)):
-                print('TIC '+str(int(sector_data['ID'][i]))+'\t'+str(i)+'/'+\
+                print('TIC '+str(int(sector_data[i,0]))+'\t'+str(i)+'/'+\
                       str(len(sector_data)))
-                ticid_coord = coord.SkyCoord(sector_data['ra'][i],
-                                             sector_data['dec'][i],
+                ticid_coord = coord.SkyCoord(sector_data[i, 4],
+                                             sector_data[i, 5],
                                              unit=(u.deg, u.deg)) 
-                sep = ticid_coord.separation(data_coords)
-                min_sep.append(np.nanmin(sep))
-                ind = np.nanargmin(sep)
+                sep = [ticid_coord.separation(coord1) for coord1 in data_coords]
+                sep_val = [angle.value for angle in sep]
+                ind = np.nanargmin(sep_val)
+                min_sep.append(sep[ind])
                 min_inds.append(ind)
 
             sep_arcsec = np.array([sep.to(u.arcsec).value for sep in min_sep])
             min_inds = np.array(min_inds).astype('int')
-            np.savetxt(prefix+'_sep.txt', sep_arcsec)
-            np.savetxt(prefix+'_sep_inds.txt', min_inds)
+            np.savetxt(metapath+'sector-%02d'%sector+'_gcvs_sep.txt',
+                       sep_arcsec)
+            np.savetxt(metapath+'sector-%02d'%sector+'_gcvs_sep_inds.txt',
+                       min_inds)
 
         # >> save the variability type if GCVS target is close enough
         with open(out_fname, 'w') as f:
@@ -235,12 +258,12 @@ def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
             for i in range(len(sector_data)):
                 if sep_arcsec[i] < tol:
                     ind = min_inds[i]            
-                    f.write(str(int(sector_data['ID'][i]))+','+\
-                            str(data['VarType'][ind])+','+\
-                            str(data['VarName'][ind])+'\n')
+                    f.write(str(int(sector_data[i,0]))+','+\
+                            str(vartype[ind])+','+\
+                            str(gcvs_id[ind])+'\n')
 
                 else:
-                    f.write(str(int(sector_data['ID'][i]))+',,\n')
+                    f.write(str(int(sector_data[i,0]))+',NONE,NONE\n')
 
         # >> plotting
         if diag_plot:
@@ -252,7 +275,8 @@ def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
             ax.set_xlabel('arcseconds')
             ax.set_ylabel('number of targets in Sector '+str(sector))
             ax.set_xscale('log')
-            fig.savefig(prefix+'_sep_arcsec.png')
+            fig.savefig(savepath+'sector%02d'%sector+'_gcvs_sep_arcsec.png')
+            plt.close()
             
             # >> compare magnitude from TIC and ASAS-SN of cross-matched targets
             tol_tests = [10, 1, 0.1] 
@@ -262,10 +286,11 @@ def query_gcvs(data_dir='./', sector='all', tol=0.1, diag_plot=True):
                 print('Tolerance: '+str(tol)+' arcseconds, number of targets: '+\
                       str(len(inds1[0])))
                 plt.figure()
-                plt.plot(sector_data['GAIAmag'][inds1[0]], data['magMax'][inds2], '.k')
-                plt.xlabel('GAIA magnitude (TIC)')
-                plt.ylabel('magMax (GCVS)')
-                plt.savefig(prefix+'_tol'+str(tol)+'.png')
+                plt.plot(sector_data[inds1[0], 3], mag[inds2], '.k')
+                plt.xlabel('TESS magnitude')
+                plt.ylabel('GCVS magnitude')
+                plt.savefig(savepath+'sector%02d'%sector+'_gcvs_tol'+\
+                            str(tol)+'.png')
                 plt.close()
                 
 def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
@@ -442,6 +467,7 @@ def clean_simbad(metapath,
         for i in range(len(filo)):
             tic = filo[i][0]
             otype = filo[i][1]
+
             main = filo[i][2]
             # tic = filo.iloc[i]['TICID']
             # otype = filo.iloc[i]['TYPE']
@@ -461,10 +487,10 @@ def clean_simbad(metapath,
                             if len(o) == 0: break
                         if '(' in o: # >> remove (B)
                             o = o[:o.index('(')]
-                        if o in remove_classes:
-                            o = ''
                         if o in list(renamed.keys()):
                             o = renamed[o]
+                        if o in remove_classes:
+                            o = ''
                         otype_list_new.append(o)
                         
                 otype = list(np.unique(otype_list_new))
@@ -493,8 +519,8 @@ def clean_asassn(metapath, uncertainty_flags=[':', '?', '*']):
     fnames.sort()
 
     for fname in fnames:
-        filo = np.loadtxt(metapath+'spoc/cat/'+fname, delimiter=',', dtype='str',
-                          skiprows=1)
+        filo = np.loadtxt(metapath+'spoc/cat/'+fname, delimiter=',',
+                          dtype='str', skiprows=1)
         # filo = pd.read_csv(metapath+'spoc/cat/'+fname, delimiter='\s+,')
         # >> original fname ends with '_asassn_raw.txt'
         # >> output fname ends with '_asassn.txt'
@@ -541,13 +567,54 @@ def clean_asassn(metapath, uncertainty_flags=[':', '?', '*']):
 # :: Organizing object types :::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+def get_otypes(catpath, string='_raw', output_dir=None, skiprows=1):
+    fnames = [f for f in os.listdir(catpath) if string in f]
+    fnames.sort()
+    otypes = []
+    for fname in fnames:
+        filo = np.loadtxt(catpath+fname, delimiter=',',
+                          dtype='str', skiprows=skiprows)
+        otypes.extend(filo[:,1])
+    print(np.unique(otypes))
+
+    if type(output_dir) != type(None):
+        var_d = get_var_descr()
+        out_f = output_dir+'otypes'+string+'.txt'
+        with open(out_f, 'w') as f:
+            f.write('### Object type, description  ###\n')
+            for otype in np.unique(otypes):
+                if otype in list(var_d.keys()):
+                    f.write(otype+','+var_d[otype]+'\n')
+                else:
+                    f.write(otype+',\n')        
+
+        print('Wrote '+out_f)
+
+        out_f = output_dir+'otypes_bar'+string+'.png'
+        all_otypes = []
+        for o in otypes:
+            all_otypes.extend(o.split('|'))
+        all_otypes, counts = np.unique(all_otypes, return_counts=True)
+        inds = np.argsort(counts)
+        all_otypes, counts = all_otypes[inds], counts[inds]
+        plt.figure(figsize=(np.max([len(all_otypes)/3, 7]),10))
+        plt.bar(all_otypes, counts)
+        plt.yscale('log')
+        plt.xticks(rotation='vertical')
+        plt.xlabel('Object types')
+        plt.ylabel('Counts')
+        plt.tight_layout()
+        plt.savefig(out_f)
+        print('Wrote '+out_f)
+        
         
 def get_var_descr():
     '''Reads docs/var_descr.txt to create a dictionary, where keys are the
     variability type abbrievations, and the values are human-understandable
     descriptions.'''
     d = {}
-    with open('docs/var_descr.txt', 'r') as f:
+    with open('tess_stellar_var/docs/var_descr.txt', 'r') as f:
         lines = f.readlines()
         for line in lines[1:]:
             key = line.split(',')[0]
@@ -822,29 +889,31 @@ def get_parents_only(class_info, parent_dict=None,
 def make_remove_class_list(catalog='', rmv_flagged=True):
     '''Currently, our pipeline can only do clustering based on photometric data.
     So classes that require spectroscopic data, etc. are removed.'''
-    rmv = ['PM', 'IR', 'nan', 'V', 'VAR', 'As', 'SB', 'LM', 'blu', 'EmO',
-           'S', 'Rad', 'C', 'mul', 'I', 'IA', 'IB', 'G', 'Sy', 'Sy1', 'Sy2',
-           'QSO', '*', 'NIR', 'Ir', 'smm', 'mR', 'cm', 'mm', 'HI', 'rB', 'Mas',
-           'FIR', 'MIR', 'NIR', 'UX', 'ULX', 'IR\t', 'gB', 'S', 'HV', 'HII']
+    rmv = ['SB', 'blu', 'EmO',
+           'S', 'Rad', 'C', 'G', 'Sy', 'Sy1', 'Sy2',
+           '*', 'NIR', 'Ir', 'smm', 'mR', 'cm', 'mm', 'HI', 'rB', 'Mas',
+           'FIR', 'MIR', 'NIR', 'UX', 'ULX', 'IR', 'gB', 'S', 'HII',
+           'UVem', 'Xem', 'Em', 'gam']
     sequence_descriptors = ['AB', 'HS', 'BS', 'YSO', 'Y', 'sg', 'BD', 's*b',
                             'Y*', 's?r', 's?b', 's*y', 'Y*O', 'RG', 'HB',
-                            's*r', 'WD', 'pA', 'LM', 'OH', 's?y', 'cor', 'bluOB']
-    non_star = ['AGN', 'PoC', 'RNe', 'RB', 'OpC', 'LSB', 'ISM', 'GiP', 'GiC' , 'EmG',
-                'DNe', 'ClG', 'Bla', 'BH']
-    not_descriptive = ['ev', 'W', 'RRD', 'RO', 'Q', 'HX', 'HH', 'HADS', 'Bz', 'BL', 'B']
+                            's*r', 'WD', 'pA', 'LM', 'OH', 's?y', 'cor', 'bluOB',
+                            'As', 'LM', 'HB']
+    # non_star = ['AGN', 'PoC', 'RNe', 'RB', 'OpC', 'LSB', 'ISM', 'GiP', 'GiC' , 'EmG',
+    #             'DNe', 'ClG', 'Bla', 'BH', 'QSO', 'Neu']
 
-    if catalog == 'simbad':
-        rmv.append('UV') # >> UV refers UV Ceti type variables in GCVS but
-                         # >> stars with strong UV radiation in SIMBAD
-        rmv.append('X')
-        rmv.append('N') # >> refers to nova in GCVS but neutron stars in SIMBAD
+    non_star = ['PoC', 'RNe', 'RB', 'OpC', 'LSB', 'ISM', 'GiP', 'GiC' , 'EmG',
+                'DNe', 'ClG', 'BH', 'Neu', 'LSB', 'RB']
+
+    not_descriptive = ['ev', 'W', 'RRD', 'RO', 'Q', 'HX', 'HH', 'HADS', 'Bz', 'BL', 'B',
+                       'PM', 'nan', 'V', 'VAR', 'HV', 'mul']
 
     if rmv_flagged:
-        flagged = ['Em', 'Pe', 'gam'] # make_flagged_class_list()
+        flagged = ['Pe', 'I', 'IA', 'IB', 'IS', 'ISA', 'ISB'] # make_flagged_class_list()
     else:
         flagged = []
 
-    return rmv+sequence_descriptors+flagged+non_star+not_descriptive
+    # return rmv+sequence_descriptors+flagged+non_star+not_descriptive
+    return rmv+sequence_descriptors+not_descriptive+non_star
 
 def make_flagged_eclip_list():
     # >> section 5bc of GCVS classifications: eclipsing systems classified
@@ -923,6 +992,120 @@ def write_true_label_txt(metapath, rmv_flagged=True,
                 f.write(str(ticid[i])+','+str(otype)+'\n')
                 # f.write(align%(ticid[i],otype)+'\n')
         print('Wrote '+out)
+
+def chan_2021_true_otypes():
+
+    var_d = {}
+    descr_d = {}
+
+    # -- Chan et al. 2021 classes ----------------------------------------------
+
+    # >> Active Galactic Nuclei-like (AGNL)
+    var_d['AGNL'] = ['QSO', 'AGN', 'BLLAC', 'Bla']
+    descr_d['AGNL'] = 'Active Galactic Nuclei-like'
+
+    # >> Cepheid (CEP)
+    var_d['CEP'] = ['CEP', 'CEP(B)', 'DCEP', 'DCEPS', 'DSCT', 'DSCTC', 'BCEP',
+                    'BCEPS', 'CW', 'CWA', 'CWB', 'RV', 'RVA', 'RVB',
+                    'BLBOO']
+
+    # >> Eclipsing Binaries (EB)
+    var_d['EB'] = ['E', 'EA', 'EB', 'EP', 'EW', 'GS', 'PN', 'RS', 'WD', 'WR',
+                   'AR', 'D', 'DM', 'DS', 'DW', 'K', 'KE', 'KW', 'SD']
+    descr_d['EB'] = 'Eclipsing Binaries'
+
+    # >> Long-Period Variables (LPV)
+    var_d['LP'] = ['LP']
+    descr_d['LP'] = 'Long-Period Variables'
+
+    # >> Mira variables (Mira)
+    var_d['M'] = ['M']
+    descr_d['M'] = 'Mira Variables'
+
+    # >> other Pulsating Variables (Pul_oth)
+    var_d['Pul_oth'] = ['Pu', 'ACYG', 'GDOR', 'L', 'LB', 'LC', 'LPB', 'PVTEL',
+                        'RPHS', 'SR', 'SRA', 'SRB' 'SRC', 'SRD', 'SRS', 'SXPHE',
+                        'ZZ', 'ZZA', 'ZZB', 'ZZO', 'SX']
+    descr_d['Pul_oth'] = 'Other Pulsating Variables'
+
+    # >> RR Lyrae (RR)
+    var_d['RR'] = ['RR', 'RR(B)', 'RRAB', 'RRC']
+    descr_d['RR'] = 'RR Lyrae'
+
+    # >> Peculiar (Pec)
+    var_d['Pec'] = ['Pe', 'I', 'IA', 'IB']
+    descr_d['Pec'] = 'Peculiar'
+
+    # -- GCVS classes ----------------------------------------------------------
+    var_d['CROT'] = ['CROT']
+    descr_d['CROT'] = 'Complex Rotators'
+
+    var_d['ROT'] = ['ACV', 'ACVO', 'BY', 'ELL', 'FKCOM', 'PSR',
+                      'R', 'SXARI', 'ROT']
+    descr_d['CROT'] = 'Other rotators'
+
+    var_d['Er'] = ['Fl', 'BE', 'FU', 'GCAS', 'IN', 'INA',
+                   'INB', 'INTIT', 'IN(YY)', 'IS', 'ISA', 'ISB', 'RCB', 'RS',
+                   'SDOR', 'UV', 'UVN', 'WR', 'GCAS', 'out', 'Ae', 'Er']
+    descr_d['Er'] = 'Eruptive Variables'
+
+    var_d['N'] = ['N', 'NA', 'NB', 'NC', 'NL', 'NR', 'SN', 'SNI', 'SNII', 'UG',
+                  'UGSS', 'UGSU', 'UGZ', 'ZAND', 'DQ', 'CV', 'AM']
+    descr_d['N'] = 'Nova-like variables'
+
+    return var_d, descr_d
+
+def get_chan_merged_otypes(metapath):
+
+    var_d, descr_d = chan_2021_true_otypes()
+    unmerged = []
+    merged = list(var_d.keys())
+    for i in range(len(merged)):
+        unmerged.extend(var_d[merged[i]])
+
+    catpath = metapath+'spoc/true/'
+    fnames = [f for f in os.listdir(catpath)]
+    fnames.sort()
+    ticid = []
+    otypes = []
+    for fname in fnames:
+        filo = np.loadtxt(catpath+fname, delimiter=',',
+                          dtype='str', skiprows=2)
+        ticid.extend(filo[:,0].astype('int'))
+        otypes.extend(filo[:,1])
+
+    new_ticid = []
+    new_otypes = []
+    unclassified = []
+    with open(metapath+'spoc/otypes_S1_26.txt', 'w') as f:
+        f.write('### Object types for S1-26 using classes defined by '+\
+                ' Chan et al., 2021 and GCVS ###\n')
+        f.write('TICID,OTYPE\n')
+        for i in range(len(ticid)):
+            if i % 500 == 0: print('TICID '+str(i)+' / '+str(len(ticid)))
+            if ticid[i] not in new_ticid:
+                new_ticid.append(ticid[i])
+                new_otype = []
+                for o in otypes[i].split('|'):
+                    if o in list(unmerged):
+                        for parent in merged:
+                            if o in var_d[parent]:
+                                new_otype.append(parent)
+                    else:
+                        new_otype.append('')
+                        unclassified.append(o)
+                new_otype = np.unique(new_otype)
+                if len(new_otype) > 1 and '' in new_otype:
+                    ind = np.nonzero(new_otype == '')[0]
+                    new_otype = np.delete(new_otype, ind)
+                if len(new_otype) == 1 and '' in new_otype:
+                    new_otype = ['UNCLASSIFIED']
+
+                new_otype = '|'.join(new_otype)
+                f.write(str(ticid[i])+','+new_otype+'\n')
+
+    print(np.unique(unclassified))
+
             
 # def read_otype_txt(otypes, otype_txt, data_dir, catalog=None, add_chars=['+', '/'],
 #                    uncertainty_flags=[':', '?', '*'], rmv_flagged=True):
