@@ -35,8 +35,9 @@ featgen      = 'CAE'
 # >> prepare specified targets (if target_prep = True)
 # targets      = [31850842] # 
 # >> Sectors 1 complex rotators reported in Zhan et al. 2019 
-targets      = [38820496, 177309964, 206544316, 234295610, 289840928,
-                425933644, 425937691] # >> known complex rotators in sectors 1
+# targets      = [38820496, 177309964, 206544316, 234295610, 289840928,
+#                 425933644, 425937691] # >> known complex rotators in sectors 1
+targets = [30265037, 44736746]
 
 # ------------------------------------------------------------------------------
 
@@ -64,31 +65,39 @@ if prep_spoc:
     # fe.sigma_clip_data(mg) # >> sigma clip
 
     # >> short timescale (1 month)
-    fe.compute_lspgram_sing_sector(mg, sectors=sectors) # >> compute ls periodogram
-    fe.preprocess_lspgram(mg, timescale=1)
+    # fe.calc_lspgram_sing_sector(mg, sectors=sectors) # >> calc ls periodogram
+    # fe.preprocess_lspgram(mg, timescale=1)
+    fe.calc_stats(datapath, timescale=1, savepath=savepath)
+
+    # fe.simulated_data(savepath, datapath, timescale=1)
+    pdb.set_trace()
 
     # >> medium timescale (6 months, 19366 targets in S1-26 2-min)
-    fe.compute_lspgram_mult_sector(mg, sectors=sectors, n_sector=6)
-    fe.preprocess_lspgram(mg, timescale=6, n_chunk=2)
+    # fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=6)
+    # fe.preprocess_lspgram(mg, timescale=6, n_chunk=2)
 
     # >> long timescale (12 months, 3000 targets in S1-26 2-min)
-    fe.compute_lspgram_mult_sector(mg, sectors=sectors, n_sector=13,
+    fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=13,
                                    plot_int=50)
-    fe.preprocess_lspgram(mg, timescale=13, n_chunk=2)
+    # fe.preprocess_lspgram(mg, timescale=13, n_chunk=2)
 
 # >> Alternatively perform quality and sigma-clip masking for a single target
 if target_prep:
     for target in targets:
-        savepath = '/scratch/echickle/tmp/'
-        lcfile = mg.datapath+'mask/sectors-01/'+str(target)+'.fits'
-        fe.sigma_clip_lc(mg, lcfile, plot=plot, n_sigma=n_sigma,
-                         savepath=savepath)
+        # savepath = '/scratch/echickle/tmp/'
+        # lcfile = mg.datapath+'mask/sectors-01/'+str(target)+'.fits'
+        # fe.sigma_clip_lc(mg, lcfile, plot=plot, n_sigma=n_sigma,
+        #                  savepath=savepath)
 
-        data,meta=dt.open_fits(fname=lcfile)
-        t, y = data['TIME'], data['FLUX']
-        fe.compute_ls_pgram(mg, lcfile, plot=True, savepath=savepath)
-        feat=fe.calc_phase_curve(t,y,plot=plot,output_dir='/home/echickle/tmp/',
-                                 prefix='TIC'+str(target)+'-')
+        # data,meta=dt.open_fits(fname=lcfile)
+        # t, y = data['TIME'], data['FLUX']
+        # fe.calc_ls_pgram(mg, lcfile, plot=True, savepath=savepath)
+        # feat=fe.calc_phase_curve(t,y,plot=plot,output_dir='/home/echickle/tmp/',
+        #                          prefix='TIC'+str(target)+'-')
+        
+        fe.calc_ls_pgram(mg, target, plot=True,
+                      savepath='/scratch/echickle/tmp/detrend/',
+                      lspmpath='/scratch/echickle/tmp/', timescale=1)
 
 # >> Create some diagnostic plots for masking
 if diag_only:

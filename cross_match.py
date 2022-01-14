@@ -185,13 +185,17 @@ def query_gcvs(metapath, savepath, sector='all', tol=0.1, diag_plot=True):
     * data_dir
     * sector: 'all' or int, currently only handles short-cadence
     * tol: maximum separation of TIC target and GCVS target (in arcsec)
+
+    See column names and descriptions of gcvs5.txt here:
+    https://heasarc.gsfc.nasa.gov/W3Browse/star-catalog/gcvs.html
     '''
     # data = pd.read_csv(metapath+'gcvs5.txt', delimiter='|')
 
-    data_coords = []
     gcvs_id = []
     vartype = []
-    mag = []
+    min_mag = []
+    max_mag = []
+    ra_all, dec_all = [], []
     with open(metapath+'gcvs5.txt', 'r') as f:
         lines = f.readlines()
         for i in range(len(lines)):
@@ -201,16 +205,39 @@ def query_gcvs(metapath, savepath, sector='all', tol=0.1, diag_plot=True):
             while '' in radec:
                 radec.remove('')
             if len(radec) != 0:
-                ra = radec[0][:2]+' '+radec[0][2:4]+' '+radec[0][4:]
-                dec = radec[1][:3]+' '+radec[1][3:5]+' '+radec[1][5:]
-                data_coords.append(coord.SkyCoord(ra, dec,
-                                                  unit=(u.hourangle, u.deg)))
                 gcvs_id.append(line.split('|')[1])
                 vartype.append(line.split('|')[3].split(' ')[0])
-                obj_mag = line.split('|')[4].split(' ')
-                while '' in obj_mag:
-                    obj_mag.remove('')
-                mag.append(obj_mag)
+
+                # >> coordinates
+                ra = radec[0][:2]+' '+radec[0][2:4]+' '+radec[0][4:]
+                dec = radec[1][:3]+' '+radec[1][3:5]+' '+radec[1][5:]
+                ra_all.append(ra)
+                dec_all.append(dec)
+
+                # >> minimum magnitude
+                flags = ['<', '>', '(', ')', ':', 'R', 'c', 'b', 'B', 'V', 'I',
+                         'u', 'U', "'", 'v', 'y', 'i', 'p', 'g', '*', ' ']
+                obj_mag = line.split('|')[4]
+                for flag in flags:
+                    while flag in obj_mag:
+                        ind = obj_mag.index(flag)
+                        obj_mag = obj_mag[:ind]+obj_mag[1+ind:]
+                if len(obj_mag) == 0:
+                    obj_mag = np.nan
+                min_mag.append(float(obj_mag))
+                
+                # >> maximum magnitude 
+                obj_mag = line.split('|')[5]
+                for flag in flags:
+                    while flag in obj_mag:
+                        ind = obj_mag.index(flag)
+                        obj_mag = obj_mag[:ind]+obj_mag[1+ind:]
+                if len(obj_mag) == 0:
+                    obj_mag = np.nan
+                max_mag.append(float(obj_mag))
+
+    data_coords = coord.SkyCoord(ra=ra_all, dec=dec_all,
+                                 unit=(u.hourangle, u.deg))
 
     if sector=='all':
         sectors = list(range(1,27))
@@ -224,33 +251,21 @@ def query_gcvs(metapath, savepath, sector='all', tol=0.1, diag_plot=True):
         print('Loaded Sector'+str(sector)+'tic_cat_all.csv')
 
         # >> find GCVS target closest to each TIC target
-        if os.path.exists(metapath+'sector-%02d'%sector+'_gcvs_sep.txt'):
-            sep_arcsec = np.loadtxt(metapath+'sector-%02d'%sector+\
-                                    '_gcvs_sep.txt')
-            min_inds = np.loadtxt(metapath+'sector-%02d'%sector+\
-                                  '_gcvs_sep_inds.txt').astype('int')
-            print('Loaded '+metapath+'sector-%02d'%sector+'_gcvs_sep.txt')
-        else:
-            min_sep = []
-            min_inds = []
-            for i in range(len(sector_data)):
+        min_sep = []
+        min_inds = []
+        for i in range(len(sector_data)):
+            if i % 500 == 0:
                 print('TIC '+str(int(sector_data[i,0]))+'\t'+str(i)+'/'+\
                       str(len(sector_data)))
-                ticid_coord = coord.SkyCoord(sector_data[i, 4],
-                                             sector_data[i, 5],
-                                             unit=(u.deg, u.deg)) 
-                sep = [ticid_coord.separation(coord1) for coord1 in data_coords]
-                sep_val = [angle.value for angle in sep]
-                ind = np.nanargmin(sep_val)
-                min_sep.append(sep[ind])
-                min_inds.append(ind)
+            ticid_coord = coord.SkyCoord(sector_data[i, 4],
+                                         sector_data[i, 5],
+                                         unit=(u.deg, u.deg)) 
+            idx, d2d, d3d =  ticid_coord.match_to_catalog_3d(data_coords)
+            min_sep.append(d2d)
+            min_inds.append(idx)
 
-            sep_arcsec = np.array([sep.to(u.arcsec).value for sep in min_sep])
-            min_inds = np.array(min_inds).astype('int')
-            np.savetxt(metapath+'sector-%02d'%sector+'_gcvs_sep.txt',
-                       sep_arcsec)
-            np.savetxt(metapath+'sector-%02d'%sector+'_gcvs_sep_inds.txt',
-                       min_inds)
+        sep_arcsec = np.array([sep.to(u.arcsec).value[0] for sep in min_sep])
+        min_inds = np.array(min_inds).astype('int')
 
         # >> save the variability type if GCVS target is close enough
         with open(out_fname, 'w') as f:
@@ -272,10 +287,11 @@ def query_gcvs(metapath, savepath, sector='all', tol=0.1, diag_plot=True):
             bins = 10**np.linspace(np.floor(np.log10(np.nanmin(sep_arcsec))),
                                    np.ceil(np.log10(np.nanmax(sep_arcsec))), 50)
             ax.hist(sep_arcsec, bins=bins, log=True)
-            ax.set_xlabel('arcseconds')
+            ax.set_xlabel('separation (arcseconds)')
             ax.set_ylabel('number of targets in Sector '+str(sector))
             ax.set_xscale('log')
             fig.savefig(savepath+'sector%02d'%sector+'_gcvs_sep_arcsec.png')
+            print('Saved '+savepath+'sector%02d'%sector+'_gcvs_sep_arcsec.png')
             plt.close()
             
             # >> compare magnitude from TIC and ASAS-SN of cross-matched targets
@@ -286,11 +302,25 @@ def query_gcvs(metapath, savepath, sector='all', tol=0.1, diag_plot=True):
                 print('Tolerance: '+str(tol)+' arcseconds, number of targets: '+\
                       str(len(inds1[0])))
                 plt.figure()
-                plt.plot(sector_data[inds1[0], 3], mag[inds2], '.k')
+                plt.plot(sector_data[inds1[0], 3],
+                         np.array(min_mag)[inds2], '.k')
                 plt.xlabel('TESS magnitude')
-                plt.ylabel('GCVS magnitude')
-                plt.savefig(savepath+'sector%02d'%sector+'_gcvs_tol'+\
-                            str(tol)+'.png')
+                plt.ylabel('Minimum GCVS magnitude')
+                out_f = savepath+'sector%02d'%sector+'_gcvs_tol'+\
+                        str(tol)+'_min.png'
+                plt.savefig(out_f)
+                print('Saved '+out_f)
+                plt.close()
+
+                plt.figure()
+                plt.plot(sector_data[inds1[0], 3],
+                         np.array(max_mag)[inds2], '.k')
+                plt.xlabel('TESS magnitude')
+                plt.ylabel('Maximum GCVS magnitude')
+                out_f = savepath+'sector%02d'%sector+'_gcvs_tol'+\
+                        str(tol)+'_max.png'
+                plt.savefig(out_f)
+                print('Saved '+out_f)
                 plt.close()
                 
 def query_asas_sn(metapath, savepath, sector='all', diag_plot=True,
