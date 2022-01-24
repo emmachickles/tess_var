@@ -16,9 +16,11 @@ timescale    = 1
 savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
 dt.create_dir(savepath)
 
+train_on_ = 'stat' # 'stat', 'lspm'
+
 datapath = '/scratch/data/tess/lcur/spoc/'
 metapath = '/scratch/data/tess/meta/'
-parampath    = '/home/echickle/work/daehyperparams.txt'
+
 datatype     = 'SPOC'
 featgen      = 'DAE'
 # clstrmeth    = 'hdbscan'
@@ -26,12 +28,20 @@ clstrmeth    = 'gmm'
 mdumpcsv     = '/scratch/data/tess/meta/Table_of_momentum_dumps.csv'
 numclstr     = 300
 
+if train_on_ == 'lspm':
+    parampath = '/home/echickle/work/daehyperparams.txt'
+if train_on_ == 'stat':
+    parampath = '/home/echickle/work/daestathyperparams.txt'
+
 # -- initialize Mergen object --------------------------------------------------
 mg = mergen(datapath, savepath, datatype, metapath=metapath,
             parampath=parampath, featgen=featgen, clstrmeth=clstrmeth,
-            mdumpcsv=mdumpcsv, numclstr=numclstr)
+            mdumpcsv=mdumpcsv, numclstr=numclstr, name=train_on_)
 
-fe.load_lspgram_fnames(mg, timescale=timescale)
+if train_on_ == 'lspm':
+    fe.load_lspgram_fnames(mg, timescale=timescale) 
+if train_on_ == 'stat':
+    fe.load_stats(mg, timescale=timescale)
 
 mg.generate_features() # >> feature extraction by deep autoencoder
 # lt.save_autoencoder_products(parampath=mg.parampath,

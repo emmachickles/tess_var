@@ -294,6 +294,7 @@ def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2,
 def progress_checker(path, old_date=None, rmv_old=False):
     import os 
     import time
+    import pdb
     import numpy as np
     fnames = [path+f for f in os.listdir(path)]
     fnames.sort(key=lambda x: os.path.getmtime(x))
@@ -384,7 +385,7 @@ def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
 # -- LS Periodograms -----------------------------------------------------------
 
 def calc_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
-                                n0=6, overwrite=False):
+                             n0=6, overwrite=True, report_time=True):
     """Compute LS-periodograms with a baseline of a single observational sector 
     (~27 days). Periodograms for stars that are observed in multiple sectors are
     averaged for each frequency bin.
@@ -450,6 +451,11 @@ def calc_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
 
     # -- compute LS periodograms -----------------------------------------------
     for i in range(len(fnames)):
+
+        if report_time and i % plot_int == 0:
+            from datetime import datetime
+            start = datetime.now()
+
         lcfile = fnames[i]
 
         ticid_lc = int(lcfile.split('/')[-1][:-5])
@@ -461,18 +467,30 @@ def calc_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
             print('Computing LS periodogram of light curve '+str(i)+'/'+\
                   str(len(fnames)))
             if plot: plot_pgram = True
+            verbose = True
+            gc.collect()
         else:
             plot_pgram = False
+            verbose = False
 
         if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits'):
             pass
         else:
-            calc_ls_pgram(mg, ticid_lc, plot=plot_pgram, 
+            calc_ls_pgram(mg, ticid_lc, plot=plot_pgram, verbose=verbose,
                           min_freq=min_freq, max_freq=max_freq, df=df, 
                           timescale=1, savepath=savepath, lspmpath=lspmpath)
 
+
+        if report_time and i % plot_int == 0:
+            end = datetime.now()
+            dur_sec = (end-start).total_seconds()
+            print('Time to produce LS-periodogram: '+str(dur_sec))
+
+
+
 def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
-                                n0=6, timescale=6, overwrite=False):
+                             n0=6, timescale=6, overwrite=False,
+                             report_time=True):
 
     if len(sectors) == 0:
         sectors = os.listdir(mg.datapath+'clip/') # >> sigma clipped light
@@ -501,7 +519,7 @@ def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
     savepath = mg.savepath+'timescale-'+str(timescale)+'sector/lspm/'
     dt.create_dir(savepath)
     dt.create_dir(savepath+'preprocess/')
-    dt.create_dir(savepath+'concat/')
+    # dt.create_dir(savepath+'concat/')
     dt.create_dir(mg.datapath+'timescale-'+str(timescale)+'sector/')
     lspmpath = mg.datapath+'timescale-'+str(timescale)+'sector/lspm/'
     dt.create_dir(lspmpath)
@@ -541,6 +559,10 @@ def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
     # -- compute LS periodograms -----------------------------------------------
     for i in range(len(ticid)):
 
+        if report_time and i % plot_int == 0:
+            from datetime import datetime
+            start = datetime.now()
+
         ticid_lc = int(ticid[i])
         # lcfiles = [f for f in fnames if str(ticid_lc) in f][:timescale]
 
@@ -548,8 +570,10 @@ def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
             print('Computing LS periodogram of light curve '+str(i)+'/'+\
                   str(len(ticid)))
             if plot: plot_pgram = True
+            verbose = True
         else:
             plot_pgram = False
+            verbose = False
 
         # !! tmp
         if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits') \
@@ -559,7 +583,12 @@ def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
             calc_ls_pgram(mg, ticid_lc, plot=plot_pgram, 
                              min_freq=min_freq, max_freq=max_freq, df=df, 
                              timescale=timescale, savepath=savepath, 
-                             lspmpath=lspmpath)
+                             lspmpath=lspmpath, verbose=verbose)
+
+        if report_time and i % plot_int == 0:
+            end = datetime.now()
+            dur_sec = (end-start).total_seconds()
+            print('Time to produce LS-periodogram: '+str(dur_sec))
 
 def calc_ls_pgram(mg, ticid, plot=False, meta=None,
                   max_freq=1/(8/1440.), min_freq=1/12.7,
@@ -588,9 +617,9 @@ def calc_ls_pgram(mg, ticid, plot=False, meta=None,
                                            flux[i][num_inds]).power(freq))
         lspm = np.median(lspm_sector, axis=0)
     else:
-        num_inds = np.nonzero(~np.isnan(np.concatenate(flux)))
-        lspm = LombScargle(np.concatenate(time)[num_inds],
-                           np.concatenate(flux)[num_inds]).power(freq)
+        num_inds = np.nonzero(~np.isnan(flux))
+        lspm = LombScargle(time[num_inds],
+                           flux[num_inds]).power(freq)
 
     # >> save periodogram
     dt.write_fits(lspmpath, meta, [freq, lspm], ['FREQ', 'LSPM'],
@@ -607,7 +636,10 @@ def calc_ls_pgram(mg, ticid, plot=False, meta=None,
         plot_lc(ax[0], time_mask, flux_mask)
 
         ax[1].set_title('Sigma clipped and detrended light curve')
-        plot_lc(ax[1], np.concatenate(time), np.concatenate(flux))
+        if timescale == 1:
+            plot_lc(ax[1], np.concatenate(time), np.concatenate(flux))
+        else:
+            plot_lc(ax[1], time, flux)
 
         ax[2].set_title('LS-periodogram')
         plot_lspm(ax[2], freq, lspm)
@@ -644,23 +676,23 @@ def calc_ls_pgram(mg, ticid, plot=False, meta=None,
         print('Saved '+fname)
         plt.close(fig)
 
-    if plot and timescale > 1:
-        sector_tic = [int(f.split('/')[-2].split('-')[-1]) for f in lcfiles]
-        nrows = len(time)+1
-        fig, ax = plt.subplots(nrows, figsize=(9,4*nrows))
-        for i in range(len(time)):
-            ax[i].set_title('TIC '+str(ticid)+' light curve, Sector '+\
-                            str(sector_tic[i]))
-            plot_lc(ax[i], time[i], flux[i])
+    # if plot and timescale > 1:
+    #     sector_tic = [int(f.split('/')[-2].split('-')[-1]) for f in lcfiles]
+    #     nrows = len(time)+1
+    #     fig, ax = plt.subplots(nrows, figsize=(9,4*nrows))
+    #     for i in range(len(time)):
+    #         ax[i].set_title('TIC '+str(ticid)+' light curve, Sector '+\
+    #                         str(sector_tic[i]))
+    #         plot_lc(ax[i], time[i], flux[i])
 
-        ax[-1].set_title('TIC '+str(ticid)+' LS-periodogram\nSectors '+\
-                         '_'.join(np.array(sector_tic).astype('str')))
-        plot_lspm(ax[-1], freq, lspm)
-        fig.tight_layout()
-        fname = savepath+'concat/lspgram_concat_TIC'+str(ticid)+'.png'
-        fig.savefig(fname)
-        print('Saved '+fname)
-        plt.close(fig)
+    #     ax[-1].set_title('TIC '+str(ticid)+' LS-periodogram\nSectors '+\
+    #                      '_'.join(np.array(sector_tic).astype('str')))
+    #     plot_lspm(ax[-1], freq, lspm)
+    #     fig.tight_layout()
+    #     fname = savepath+'concat/lspgram_concat_TIC'+str(ticid)+'.png'
+    #     fig.savefig(fname)
+    #     print('Saved '+fname)
+    #     plt.close(fig)
 
 def detrend_lc(time, flux):
     from scipy.signal import detrend
@@ -675,6 +707,23 @@ def detrend_lc(time, flux):
         flux[gap_inds] = detrend(flux[gap_inds])
 
     return flux
+
+def local_rms(x, y, kernel):
+    local_rms = []
+    for i in range(len(x)):
+        y = detrend_lc(x, y)
+        local_rms.append(np.sqrt(np.mean(y[np.max([0,i-kernel]):\
+                                           np.min([len(x),i+kernel])]**2)))
+    rms = np.mean(local_rms)
+    return rms
+
+def local_std(x, y, kernel):
+    local_std = []
+    for i in range(len(x)):
+        local_std.append(np.std(y[np.max([0,i-kernel]):\
+                                  np.min([len(x),i+kernel])]))
+    std = np.mean(local_std)
+    return std
 
 def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
                        timescale=1):
@@ -914,20 +963,12 @@ def calc_lspm_stats(t=None, y=None, frequency=None, power=None,
     masked_power = np.copy(power)
 
     # >> values for checking periodicity
-    fwhm = np.min(frequency)/2 # >> 1/T = min_freq/2
+    fwhm = np.min(frequency)/2 # >> (1/T)/2 = min_freq/2
     df = frequency[1]-frequency[0]
-    kernel = int(5*fwhm/df)
+    kernel = int(5*fwhm/df) # ~ 5*
 
     detrend_power = detrend(masked_power) 
-    # local_rms = np.sqrt(np.mean(detrend_power[np.max([0,max_ind-kernel]):\
-    #                                           np.min([len(frequency),
-    #                                                   max_ind+kernel])]**2))
-    rms = []
-    for i in range(len(frequency)):
-        rms.append(np.sqrt(np.mean(detrend_power[np.max([0,i-kernel]):\
-                                                 np.min([len(frequency),
-                                                         i+kernel])]**2)))
-    rms = np.mean(rms)
+    rms = local_rms(frequency, detrend_power, kernel)
 
     while periodic:
         # >> find frequency with the highest power
@@ -1072,6 +1113,7 @@ def calc_lspm_stats(t=None, y=None, frequency=None, power=None,
                                                   freq=frequency, lspm=power)
 
             plot_lc(ax[i+1, 0], folded_t, folded_y, c='k', marker='.', ms=2,
+
                     fillstyle='full', label='data', linestyle='')
 
             w = 2*np.pi/period
@@ -1080,8 +1122,10 @@ def calc_lspm_stats(t=None, y=None, frequency=None, power=None,
             #                        p0=[1,1,2*np.pi/period,1])
             # A, w, p, c = popt
             # sinfit = sinfunc(folded_t, A, w, p, c)
+
             def sinfunc(t, A, p, c): return A*np.sin(w*t + p) + c
             popt, pcov = curve_fit(sinfunc, folded_t, folded_y)
+
             A, p, c = popt
             sinfit = sinfunc(folded_t, A, p, c)
             plot_lc(ax[i+1, 0], folded_t, sinfit, c='r', linestyle='-',
@@ -1305,7 +1349,7 @@ def calc_phase_curve(period, time=None, flux=None, freq=None, lspm=None,
 
     return folded_t.value, folded_y.value
 
-def simulated_data(savepath, datapath, timescale=1):
+def test_simulated_data(savepath, datapath, timescale=1):
     
     # >> get frequency grid
     with open(savepath+'timescale-'+str(timescale)+'sector/lspm/'+\
@@ -1349,6 +1393,129 @@ def simulated_data(savepath, datapath, timescale=1):
 
     return
 
+def spoc_noise(datapath, kernel=30):
+    from scipy.signal import medfilt
+
+    lcpath = datapath+'clip/'
+
+    fig, ax = plt.subplots()
+
+
+def periodic_simulated_data(savepath, datapath, metapath, timescale=1,
+                            n_samples=100):
+    from scipy.stats import loguniform
+    
+    # >> get frequency grid
+    with open(savepath+'timescale-'+str(timescale)+'sector/lspm/'+\
+              'frequency_grid.txt', 'r') as f:
+        lines = f.readlines()
+        min_freq = float(lines[0].split(',')[1][:-2])
+        max_freq = float(lines[1].split(',')[1][:-2])
+        df = float(lines[2].split(',')[1][:-2])
+    freq = np.arange(min_freq, max_freq, df)
+
+    # >> get time grid
+    T = 2/min_freq
+    sampling_rate = 1/(4*max_freq)
+    t = np.arange(0, T, sampling_rate)
+
+    # >> create output directory
+    dt.create_dir(savepath+'timescale-'+str(timescale)+'sector/feat_eng/')
+    savepath = savepath+'timescale-'+str(timescale)+'sector/feat_eng/'+\
+               'lspm-feats-mock/'
+    dt.create_dir(savepath)
+
+    # -- infer white noise amplitude -------------------------------------------
+
+    # >> infer typical noise levels from Sector 1 light curves' local stdev 
+    sector = 1
+
+    if os.path.exists(savepath+'Sector%02d'%sector+'_Tmag.txt'):
+        filo = np.loadtxt(savepath+'Sector%02d'%sector+'_Tmag.txt',
+                          delimiter=',', skiprows=1)
+        mags = filo[:,0]
+        white_noise_amp = filo[:,1]
+        mag_min, mag_max, mag_bin = min(mags), max(mags), np.diff(mags)[0]
+        
+    else:
+        mag_min, mag_max = 2.5, 17.5 # >> Sector 1 Tmag: [1.94, 18.16]
+        mag_bin = 0.5 # >> mags sampled from min=mag_min, max=mag_max, step=mag_bin
+        
+        lcpath = datapath+'clip/'
+        filo = np.loadtxt(metapath+'spoc/targ/2m/all_targets_S%03d'%sector+\
+                          '_v1.txt')
+        ticid = filo[:,0].astype('int')
+        Tmag = filo[:,3] # >> TESS magnitudes
+
+        ticid_lc = [int(f[:-5]) for f in os.listdir(lcpath+'sector-%02d'%sector+'/')]
+        _, comm1, comm2 = np.intersect1d(ticid, ticid_lc, return_indices=True)
+        ticid = ticid[comm1]
+        Tmag = Tmag[comm1]
+
+        inds = np.argsort(Tmag) # >> sort ticid and Tmag by Tmag
+        ticid = ticid[inds]
+        Tmag = Tmag[inds]
+        grid = np.indices(ticid.shape)[0]
+
+        mags = np.arange(mag_min, mag_max, mag_bin)
+        white_noise_amp = []
+        fig, ax = plt.subplots(len(mags), 3, figsize=(len(mags)*4, 3*10))
+        for i, mag in zip(range(len(mags)), mags):
+            inds = np.nonzero((Tmag < mag+mag_bin)*(Tmag > mag-mag_bin))[0]
+            std_avg = []
+            for j in range(len(inds)):
+                t, y = get_lc(lcpath, ticid[inds[j]], 1, return_sector=True,
+                                 rmv_nan=True)        
+                t, y = t[0], y[0]
+
+                std_lc = local_std(t, y, 15)
+                std_avg.append(std_lc)
+                if j < 3:
+                    plot_lc(ax[i,j], t, y)
+                    ax[i,j].set_title('TIC '+str(ticid[inds[j]])+\
+                                      '\nTmag '+str(Tmag[inds[j]])+\
+                                      ', Local STD '+str(np.round(std_lc, 3)))
+
+            std_avg = np.mean(std_avg)
+            ax[i,0].set_title('White noise amplitude: '+str(std_avg)+'\n'+\
+                              ax[i,0].get_title())
+            white_noise_amp.append(std_avg)
+        fig.tight_layout()
+        fig.savefig(savepath+'Sector%02d'%sector+'_Tmag_lc.png')
+        np.savetxt(savepath+'Sector%02d'%sector+'_Tmag.txt',
+                   np.array([mags, white_noise_amp]).T, delimiter=',',
+                   header='Tmag,WN_amp')
+
+    # -- Initialize distributations --------------------------------------------
+    # >> Initilize log uniform random variables to sample number of peaks,
+    # >> amplitudes, periods, and magnitudes
+    rv_npeak = loguniform.rvs(0, 10, size=n_samples)
+    rv_mag = loguniform.rvs(mag_min, mag_max, size=n_samples)
+    rv_mag = (rv_mag/mag_bin).astype('int')*mag_bin
+
+    # -- Create light curves ---------------------------------------------------
+
+    y_lc = []
+
+    for i in range(n_samples):
+        rv_mag[i] = 10. # !! tmp
+
+        ind = np.nonzero(mags == rv_mag[i])[0]
+        y = white_noise_amp[ind]*np.random.normal(size=len(t))
+        rv_amp = loguniform.rvs(0, 1, size=rv_npeak[i])
+        rv_period = loguniform.rvs(1/max_freq, 1/min_freq, size=rv_npeak[i])
+
+        for j in range(rv_npeak[i]):
+            y += np.sin( (2*np.pi/rv_period[j]) * t )
+
+        y_lc.append(y)
+
+        pdb.set_trace()
+
+    return y_lc
+
+    # >> https://heasarc.gsfc.nasa.gov/docs/tess/observing-technical.html
+
 # -- Light curve and LS periodogram statistics ---------------------------------
 
 def calc_stats(datapath, timescale, savepath):
@@ -1358,6 +1525,7 @@ def calc_stats(datapath, timescale, savepath):
 
     lcpath = datapath+'clip/'
     lspmpath = datapath+'timescale-'+str(timescale)+'sector/lspm/'
+    txtpath = datapath+'timescale-'+str(timescale)+'sector/'
     ticid = [int(f[:-5]) for f in os.listdir(lspmpath)]
 
     statpath = savepath+'timescale-'+str(timescale)+'sector/feat_eng/S1-26/'
@@ -1371,8 +1539,8 @@ def calc_stats(datapath, timescale, savepath):
         for stat in ['avg', 'std', 'skew', 'kur']:
             lspm_feat_desc.append(feat+'_'+stat)
     
-    with open(statpath+'feat_eng.txt', 'w') as f:
-        f.write('TICID,'+','.join(lc_feat_desc)+','.join(lspm_feat_desc)+'\n')
+    with open(txtpath+'feat_eng.txt', 'w') as f:
+        f.write('TICID,'+','.join(lc_feat_desc)+','+','.join(lspm_feat_desc)+'\n')
 
     stats = []
     for i in range(len(ticid)):
@@ -1405,7 +1573,7 @@ def calc_stats(datapath, timescale, savepath):
         
         # -- save statistics ---------------------------------------------------
 
-        with open(statpath+'feat_eng.txt', 'a') as f:
+        with open(txtpath+'feat_eng.txt', 'a') as f:
             f.write(str(ticid[i])+','+\
                     ','.join([str(feat) for feat in lc_feats])+\
                     ','.join([str(feat) for feat in lspm_feats])+'\n')
@@ -1447,6 +1615,21 @@ def calc_stats(datapath, timescale, savepath):
         fig.savefig(out_f)
         print('Saved '+out_f)
         plt.close(fig)
+
+def load_stats(mg, timescale=1):
+    fname = mg.datapath+'timescale-'+str(timescale)+'sector/feat_eng.txt'
+    # !! TODO: read cols from first line in fname
+    cols = ['TICID', 'y_avg', 'y_std', 'y_skew', 'y_kur', 'Npeak', 'P_avg',
+            'P_std', 'P_skew', 'P_kur', 'Pratio_avg', 'Pratio_std',
+            'Pratio_skew', 'Pratio_kur', 'A_avg', 'A_std', 'A_skew',
+            'A_kur', 'Aratio_avg', 'Aratio_std', 'Aratio_skew', 'Aratio_kur']
+    filo = np.loadtxt(fname, skiprows=1, delimiter=',')
+    inds = np.nonzero(~np.isnan(filo[:,-1]))
+
+    print('Periodic: '+str(len(inds[0]))+' / '+str(len(filo)))
+
+    mg.objid = filo[inds][:,0]
+    mg.x_train = filo[inds][:,1:]
 
         
 def plot_lspm(ax, freq, lspm, plot_freq=False, **kwargs):

@@ -65,21 +65,21 @@ if prep_spoc:
     # fe.sigma_clip_data(mg) # >> sigma clip
 
     # >> short timescale (1 month)
-    # fe.calc_lspgram_sing_sector(mg, sectors=sectors) # >> calc ls periodogram
+    # fe.calc_lspgram_sing_sector(mg, sectors=sectors, overwrite=True) 
     # fe.preprocess_lspgram(mg, timescale=1)
-    fe.calc_stats(datapath, timescale=1, savepath=savepath)
+    # fe.calc_stats(datapath, timescale=1, savepath=savepath)
 
-    # fe.simulated_data(savepath, datapath, timescale=1)
+    # fe.test_simulated_data(savepath, datapath, timescale=1)
     pdb.set_trace()
 
     # >> medium timescale (6 months, 19366 targets in S1-26 2-min)
-    # fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=6)
-    # fe.preprocess_lspgram(mg, timescale=6, n_chunk=2)
+    fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=6)
+    fe.preprocess_lspgram(mg, timescale=6, n_chunk=2)
 
     # >> long timescale (12 months, 3000 targets in S1-26 2-min)
     fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=13,
                                    plot_int=50)
-    # fe.preprocess_lspgram(mg, timescale=13, n_chunk=2)
+    fe.preprocess_lspgram(mg, timescale=13, n_chunk=2)
 
 # >> Alternatively perform quality and sigma-clip masking for a single target
 if target_prep:
