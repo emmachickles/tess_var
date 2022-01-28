@@ -314,7 +314,10 @@ def progress_checker(path, old_date=None, rmv_old=False):
         return fnames[ind:]
 
 def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
-           detrend=False, plot=False, savepath=None, return_sector=False):
+           detrend=False, plot=False, savepath=None, return_sector=False,
+           sector=None):
+
+    ticid = int(ticid)
 
     # -- load raw light curve data ---------------------------------------------
 
@@ -323,6 +326,10 @@ def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
         fnames.extend([lcpath+s+'/'+f for f in \
                        os.listdir(lcpath+s) \
                        if str(ticid) in f])
+
+    if type(sector) != type(None):
+        fnames = [lcpath+'sector-%02d'%sector+'/'+str(ticid)+'.fits']
+
     t, y = [], []
     for fname in fnames:
         data, meta = dt.open_fits(fname=fname)  
@@ -1393,17 +1400,107 @@ def test_simulated_data(savepath, datapath, timescale=1):
 
     return
 
-def spoc_noise(datapath, kernel=30):
+def spoc_noise(datapath, metapath, savepath, kernel=25, timescale=1):
     from scipy.signal import medfilt
 
-    lcpath = datapath+'clip/'
+    mag_min, mag_max = 2.5, 17.5 # >> Sector 1 Tmag: [1.94, 18.16]
+    mag_bin = 0.5 # >> mags sampled from min=mag_min, max=mag_max, step=mag_bin
 
-    fig, ax = plt.subplots()
+    lcpath = datapath+'clip/'
+    savepath = savepath+'timescale-'+str(timescale)+'sector/feat_eng/'+\
+               'lspm-feats-mock/'
+
+    # >> read target file
+    sectors = [int(sector.split('-')[-1]) for sector in \
+               os.listdir(datapath+'mask/')]
+    sectors.sort()
+    ticid = np.empty(0)
+    Tmag = np.empty(0)
+    sector_num = np.empty(0)
+    for sector in sectors:
+        
+        filo = np.loadtxt(metapath+'spoc/targ/2m/all_targets_S%03d'%sector+\
+                          '_v1.txt')
+        ticid_sect = filo[:,0].astype('int')
+        Tmag_sect = filo[:,3] # >> TESS magnitudes
+
+        # >> Match TICID to Tmag
+        ticid_lc = [int(f[:-5]) for f in os.listdir(lcpath+'sector-%02d'%sector+'/')]
+        _, comm1, comm2 = np.intersect1d(ticid_sect, ticid_lc, return_indices=True)
+        ticid_sect = ticid_sect[comm1]
+        Tmag_sect = Tmag_sect[comm1]
+
+        ticid = np.append(ticid, ticid_sect)
+        Tmag = np.append(Tmag, Tmag_sect) # >> TESS magnitudes
+        sector_num = np.append(sector_num, np.ones(len(Tmag_sect))*sector)
+
+    # >> sort ticid and Tmag by Tmag
+    inds = np.argsort(Tmag) 
+    ticid = ticid[inds].astype('int')
+    Tmag = Tmag[inds]
+    sector_num = sector_num[inds].astype('int')
+    grid = np.indices(ticid.shape)[0]
+
+    mags = np.arange(mag_min, mag_max, mag_bin)    
+    fig, ax = plt.subplots(len(mags), 3, figsize=(3*8, 3*len(mags)))
+    for i, mag in zip(range(len(mags)), mags):
+        inds = np.nonzero((Tmag < mag+mag_bin)*(Tmag > mag-mag_bin))[0]
+        for j in range(min([10,len(inds)])):
+            t, y = get_lc(lcpath, ticid[inds[j]], 1, 
+                          rmv_nan=True, sector=sector_num[inds[j]])
+            # t, y = t[0], y[0]
+            y_med = medfilt(y, kernel_size=kernel)
+            y_noise = y - y_med
+            if j < 3:
+                plot_lc(ax[i,j], t, y-np.median(y))
+                plot_lc(ax[i,j], t, y_noise, c='r', alpha=0.5)
+                ax[i,j].set_title('TIC '+str(ticid[inds[j]])+\
+                                  '\nTmag '+str(Tmag[inds[j]]))
+
+    fig.tight_layout()
+    fig.savefig(savepath+'S1-26_Tmag_lc.png')
+
+    np.savetxt(savepath+'S1-26_Tmag.txt',
+               np.array([sector_num, ticid, Tmag]).T, delimiter=',',
+               header='Sector,TICID,Tmag')
+    
+                
+
+    # # >> get amplitude of white noise
+    # white_noise_amp = []
+    # fig, ax = plt.subplots(len(mags), 3, figsize=(len(mags)*4, 3*10))
+    # for i, mag in zip(range(len(mags)), mags):
+    #     inds = np.nonzero((Tmag < mag+mag_bin)*(Tmag > mag-mag_bin))[0]
+    #     std_avg = []
+    #     for j in range(len(inds)):
+    #         t, y = get_lc(lcpath, ticid[inds[j]], 1, return_sector=True,
+    #                          rmv_nan=True)        
+    #         t, y = t[0], y[0]
+
+    #         std_lc = local_std(t, y, 15)
+    #         std_avg.append(std_lc)
+    #         if j < 3:
+    #             plot_lc(ax[i,j], t, y)
+    #             ax[i,j].set_title('TIC '+str(ticid[inds[j]])+\
+    #                               '\nTmag '+str(Tmag[inds[j]])+\
+    #                               ', Local STD '+str(np.round(std_lc, 3)))
+
+    #     std_avg = np.mean(std_avg)
+    #     ax[i,0].set_title('White noise amplitude: '+str(std_avg)+'\n'+\
+    #                       ax[i,0].get_title())
+    #     white_noise_amp.append(std_avg)
+    # fig.tight_layout()
+    # fig.savefig(savepath+'Sector%02d'%sector+'_Tmag_lc.png')
+    # np.savetxt(savepath+'Sector%02d'%sector+'_Tmag.txt',
+    #            np.array([mags, white_noise_amp]).T, delimiter=',',
+    #            header='Tmag,WN_amp')
+
 
 
 def periodic_simulated_data(savepath, datapath, metapath, timescale=1,
-                            n_samples=100):
+                            n_samples=100, kernel=25, mag_min=1, nrows=10):
     from scipy.stats import loguniform
+    from scipy.signal import medfilt
     
     # >> get frequency grid
     with open(savepath+'timescale-'+str(timescale)+'sector/lspm/'+\
@@ -1414,103 +1511,64 @@ def periodic_simulated_data(savepath, datapath, metapath, timescale=1,
         df = float(lines[2].split(',')[1][:-2])
     freq = np.arange(min_freq, max_freq, df)
 
-    # >> get time grid
-    T = 2/min_freq
-    sampling_rate = 1/(4*max_freq)
-    t = np.arange(0, T, sampling_rate)
-
     # >> create output directory
     dt.create_dir(savepath+'timescale-'+str(timescale)+'sector/feat_eng/')
     savepath = savepath+'timescale-'+str(timescale)+'sector/feat_eng/'+\
                'lspm-feats-mock/'
     dt.create_dir(savepath)
+    lcpath = datapath+'clip/'
 
-    # -- infer white noise amplitude -------------------------------------------
 
-    # >> infer typical noise levels from Sector 1 light curves' local stdev 
-    sector = 1
+    # -- get Tmag --------------------------------------------------------------
 
-    if os.path.exists(savepath+'Sector%02d'%sector+'_Tmag.txt'):
-        filo = np.loadtxt(savepath+'Sector%02d'%sector+'_Tmag.txt',
-                          delimiter=',', skiprows=1)
-        mags = filo[:,0]
-        white_noise_amp = filo[:,1]
-        mag_min, mag_max, mag_bin = min(mags), max(mags), np.diff(mags)[0]
-        
-    else:
-        mag_min, mag_max = 2.5, 17.5 # >> Sector 1 Tmag: [1.94, 18.16]
-        mag_bin = 0.5 # >> mags sampled from min=mag_min, max=mag_max, step=mag_bin
-        
-        lcpath = datapath+'clip/'
-        filo = np.loadtxt(metapath+'spoc/targ/2m/all_targets_S%03d'%sector+\
-                          '_v1.txt')
-        ticid = filo[:,0].astype('int')
-        Tmag = filo[:,3] # >> TESS magnitudes
-
-        ticid_lc = [int(f[:-5]) for f in os.listdir(lcpath+'sector-%02d'%sector+'/')]
-        _, comm1, comm2 = np.intersect1d(ticid, ticid_lc, return_indices=True)
-        ticid = ticid[comm1]
-        Tmag = Tmag[comm1]
-
-        inds = np.argsort(Tmag) # >> sort ticid and Tmag by Tmag
-        ticid = ticid[inds]
-        Tmag = Tmag[inds]
-        grid = np.indices(ticid.shape)[0]
-
-        mags = np.arange(mag_min, mag_max, mag_bin)
-        white_noise_amp = []
-        fig, ax = plt.subplots(len(mags), 3, figsize=(len(mags)*4, 3*10))
-        for i, mag in zip(range(len(mags)), mags):
-            inds = np.nonzero((Tmag < mag+mag_bin)*(Tmag > mag-mag_bin))[0]
-            std_avg = []
-            for j in range(len(inds)):
-                t, y = get_lc(lcpath, ticid[inds[j]], 1, return_sector=True,
-                                 rmv_nan=True)        
-                t, y = t[0], y[0]
-
-                std_lc = local_std(t, y, 15)
-                std_avg.append(std_lc)
-                if j < 3:
-                    plot_lc(ax[i,j], t, y)
-                    ax[i,j].set_title('TIC '+str(ticid[inds[j]])+\
-                                      '\nTmag '+str(Tmag[inds[j]])+\
-                                      ', Local STD '+str(np.round(std_lc, 3)))
-
-            std_avg = np.mean(std_avg)
-            ax[i,0].set_title('White noise amplitude: '+str(std_avg)+'\n'+\
-                              ax[i,0].get_title())
-            white_noise_amp.append(std_avg)
-        fig.tight_layout()
-        fig.savefig(savepath+'Sector%02d'%sector+'_Tmag_lc.png')
-        np.savetxt(savepath+'Sector%02d'%sector+'_Tmag.txt',
-                   np.array([mags, white_noise_amp]).T, delimiter=',',
-                   header='Tmag,WN_amp')
+    filo = np.loadtxt(savepath+'S1-26_Tmag.txt',
+                      delimiter=',', skiprows=1)
+    sector = filo[:,0]
+    ticid = filo[:,1]
+    Tmag = filo[:,2]
 
     # -- Initialize distributations --------------------------------------------
     # >> Initilize log uniform random variables to sample number of peaks,
     # >> amplitudes, periods, and magnitudes
-    rv_npeak = loguniform.rvs(0, 10, size=n_samples)
-    rv_mag = loguniform.rvs(mag_min, mag_max, size=n_samples)
-    rv_mag = (rv_mag/mag_bin).astype('int')*mag_bin
+    npeak = np.round(loguniform.rvs(1, 10, size=n_samples)).astype('int')
+    rv_mag = loguniform.rvs(mag_min, max(Tmag), size=n_samples)
 
     # -- Create light curves ---------------------------------------------------
 
     y_lc = []
+    period = []
+    amp = []
+    
+    fig, ax = plt.subplots(nrows, figsize=(8, nrows*4))
 
     for i in range(n_samples):
-        rv_mag[i] = 10. # !! tmp
+        # >> get white noise from random light curve of the same magnitude
+        ind = np.argmin(np.abs(Tmag-rv_mag[i]))
+        t, y = get_lc(lcpath, ticid[ind], 1, rmv_nan=True, sector=sector[ind])
+        y_med = medfilt(y, kernel_size=kernel)
+        y_noise = y - y_med
+        y = y_noise
+        amp_lc = np.std(y_med)
+        
+        # >> make signal
+        rv_period = loguniform.rvs(1/max_freq, 1/min_freq, size=npeak[i])
 
-        ind = np.nonzero(mags == rv_mag[i])[0]
-        y = white_noise_amp[ind]*np.random.normal(size=len(t))
-        rv_amp = loguniform.rvs(0, 1, size=rv_npeak[i])
-        rv_period = loguniform.rvs(1/max_freq, 1/min_freq, size=rv_npeak[i])
-
-        for j in range(rv_npeak[i]):
-            y += np.sin( (2*np.pi/rv_period[j]) * t )
+        for j in range(npeak[i]):
+            y += amp_lc * np.sin( (2*np.pi/rv_period[j]) * t )
 
         y_lc.append(y)
+        period.append(rv_period)
+        amp.append(amp_lc)
 
-        pdb.set_trace()
+        if i < nrows:
+            plot_lc(ax[i], t, y)
+            ax[i].set_title('Mag '+str(np.round(rv_mag[i],2))+\
+                            ', npeak '+str(npeak[i])+\
+                            '\nPeriods '+str(np.round(period[i],3)))
+        
+    fig.tight_layout()
+    fig.savefig(savepath+'simulated_lc.png')
+    print('Saved '+savepath+'simulated_lc.png')
 
     return y_lc
 
@@ -1649,11 +1707,64 @@ def plot_lc(ax, time, flux, **kwargs):
     # else:
     #     ax.plot(time, flux, marker='.', c='k', ms=2, fillstyle='full',
     #             **kwargs)
-    if len(kwargs.keys()) == 0:
-        ax.plot(time, flux, marker='.', c='k', ms=2, fillstyle='full',
-                linestyle='')
-    else:
-        ax.plot(time, flux, **kwargs)
+    
+    default_kwargs = {'marker': '.', 'c': 'k', 'ms': 2, 'fillstyle': 'full',
+                      'linestyle':''}
+    for key in default_kwargs.keys():
+        if key not in kwargs.keys():
+            kwargs[key] = default_kwargs[key]
+
+    ax.plot(time, flux, **kwargs)
     ax.set_xlabel('Time [BJD - 2457000]')
     ax.set_ylabel('Relative Flux')
 
+# !!!===========================================================================
+
+    # else:
+    #     mag_min, mag_max = 2.5, 17.5 # >> Sector 1 Tmag: [1.94, 18.16]
+    #     mag_bin = 0.5 # >> mags sampled from min=mag_min, max=mag_max, step=mag_bin
+        
+    #     lcpath = datapath+'clip/'
+    #     filo = np.loadtxt(metapath+'spoc/targ/2m/all_targets_S%03d'%sector+\
+    #                       '_v1.txt')
+    #     ticid = filo[:,0].astype('int')
+    #     Tmag = filo[:,3] # >> TESS magnitudes
+
+    #     ticid_lc = [int(f[:-5]) for f in os.listdir(lcpath+'sector-%02d'%sector+'/')]
+    #     _, comm1, comm2 = np.intersect1d(ticid, ticid_lc, return_indices=True)
+    #     ticid = ticid[comm1]
+    #     Tmag = Tmag[comm1]
+
+    #     inds = np.argsort(Tmag) # >> sort ticid and Tmag by Tmag
+    #     ticid = ticid[inds]
+    #     Tmag = Tmag[inds]
+    #     grid = np.indices(ticid.shape)[0]
+
+    #     mags = np.arange(mag_min, mag_max, mag_bin)
+    #     white_noise_amp = []
+    #     fig, ax = plt.subplots(len(mags), 3, figsize=(len(mags)*4, 3*10))
+    #     for i, mag in zip(range(len(mags)), mags):
+    #         inds = np.nonzero((Tmag < mag+mag_bin)*(Tmag > mag-mag_bin))[0]
+    #         std_avg = []
+    #         for j in range(len(inds)):
+    #             t, y = get_lc(lcpath, ticid[inds[j]], 1, return_sector=True,
+    #                              rmv_nan=True)        
+    #             t, y = t[0], y[0]
+
+    #             std_lc = local_std(t, y, 15)
+    #             std_avg.append(std_lc)
+    #             if j < 3:
+    #                 plot_lc(ax[i,j], t, y)
+    #                 ax[i,j].set_title('TIC '+str(ticid[inds[j]])+\
+    #                                   '\nTmag '+str(Tmag[inds[j]])+\
+    #                                   ', Local STD '+str(np.round(std_lc, 3)))
+
+    #         std_avg = np.mean(std_avg)
+    #         ax[i,0].set_title('White noise amplitude: '+str(std_avg)+'\n'+\
+    #                           ax[i,0].get_title())
+    #         white_noise_amp.append(std_avg)
+    #     fig.tight_layout()
+    #     fig.savefig(savepath+'Sector%02d'%sector+'_Tmag_lc.png')
+    #     np.savetxt(savepath+'Sector%02d'%sector+'_Tmag.txt',
+    #                np.array([mags, white_noise_amp]).T, delimiter=',',
+    #                header='Tmag,WN_amp')
