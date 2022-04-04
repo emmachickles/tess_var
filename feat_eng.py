@@ -825,8 +825,8 @@ def load_lspgram_fnames(mg, timescale=1):
     mg.objid = np.array(mg.objid).astype('int')
     mg.x_train = None
         
-def load_lspgram(mg):
-    path = mg.datapath+'dae/'
+def load_lspgram(mg, timescale=1):
+    path = mg.datapath+'timescale-'+str(timescale)+'sector/ae/'
     n_chunks = max([int(f[5:7]) for f in os.listdir(path) if 'chunk' in f])+1
     
     mg.sector, mg.objid, mg.x_train = [], [], []
@@ -850,9 +850,11 @@ def load_lspgram(mg):
     # mg.objid = mg.objid[:100]
     # mg.x_train = mg.x_train[:100].astype(np.float32)
 
-    mg.sector = mg.sector[:1000]
-    mg.objid = mg.objid[:1000]
-    mg.x_train = np.array(mg.x_train[:1000]).astype(np.float32)
+    mg.x_train = np.array(mg.x_train).astype(np.float32)
+
+    # mg.sector = mg.sector[:1000]
+    # mg.objid = mg.objid[:1000]
+    # mg.x_train = np.array(mg.x_train[:1000]).astype(np.float32)
             
 # -- Phase Curve Features ------------------------------------------------------
 
@@ -1049,7 +1051,7 @@ def peak_finder(t=None, y=None, frequency=None, power=None, ticid=None,
                 return A*np.sin((2*np.pi/period)*t + p) + c
             popt, pcov = curve_fit(sinfunc, folded_t, folded_y)
             A, p, c = popt
-            peak_amp.append(A)
+            peak_amp.append(np.abs(A))
 
             if plot:
                 fig.add_subplot(1+len(peak_ind),3,1)
@@ -1519,7 +1521,26 @@ def periodic_simulated_data(savepath, datapath, metapath, timescale=1,
     fig.savefig(savepath+'simulated_lc.png')
     print('Saved '+savepath+'simulated_lc.png')
 
-    return t_lc, y_lc, period, amp
+    return t_lc, y_lc, period, amp, rv_mag
+
+def eval_simulated_data(P_pred, P_true, df):
+    TP = 0
+    matched = []
+    for j in range(len(P_pred)):
+        ind = np.argmin(np.abs(1/P_true - 1/P_pred[j]))
+        if np.abs(1/P_pred[j] - 1/P_true[ind]) < 2*df and ind not in matched:
+            TP += 1
+            matched.append(ind)
+
+    if len(P_pred) > 0:
+        precision = TP / len(P_pred)
+    else:
+        precision = np.nan
+    if len(P_true) > 0:
+        recall = TP / len(P_true)
+    else:
+        recall = np.nan
+    return precision, recall
 
     # >> https://heasarc.gsfc.nasa.gov/docs/tess/observing-technical.html
 

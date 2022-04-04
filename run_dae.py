@@ -16,7 +16,7 @@ timescale    = 1
 savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
 dt.create_dir(savepath)
 
-train_on_ = 'stat' # 'stat', 'lspm'
+train_on_ = 'lspm' # 'stat', 'lspm'
 
 datapath = '/scratch/data/tess/lcur/spoc/'
 metapath = '/scratch/data/tess/meta/'
