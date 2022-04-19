@@ -29,7 +29,9 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
 fe.load_lspgram_fnames(mg, timescale=timescale)
-mg.optimize_params()
+# mg.optimize_params()
 pdb.set_trace()
 mg.generate_features() # >> feature extraction by conv autoencoder
+
+pdb.set_trace()
 mg.generate_clusters()
