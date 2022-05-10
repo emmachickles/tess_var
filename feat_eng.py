@@ -88,6 +88,8 @@ def sigma_clip_data(mg, plot=True, plot_int=200, n_sigma=7,
 def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
                   timescaldtrn=1/24., savepath=None):
 
+    import ephesus.ephesus.util as ephesus # >> exoplanet science library
+
     if type(savepath) == type(None):
         savepath = mg.savepath + 'clip/' + sector + '/'
 
@@ -819,7 +821,6 @@ def load_lspgram_fnames(mg, timescale=1):
         fnames.append(path+'chunk%02d'%n+'_train_lspm.npy')
         mg.sector.extend(np.load(path+'chunk%02d'%n+'_train_sector.npy'))
         mg.objid.extend(np.load(path+'chunk%02d'%n+'_train_ticid.npy'))
-
     mg.batch_fnames = fnames
     mg.sector = np.array(mg.sector).astype('int')
     mg.objid = np.array(mg.objid).astype('int')

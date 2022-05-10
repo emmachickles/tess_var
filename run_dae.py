@@ -23,8 +23,8 @@ metapath = '/scratch/data/tess/meta/'
 
 datatype     = 'SPOC'
 featgen      = 'DAE'
-# clstrmeth    = 'hdbscan'
-clstrmeth    = 'gmm'
+clstrmeth    = 'hdbscan'
+# clstrmeth    = 'gmm'
 mdumpcsv     = '/scratch/data/tess/meta/Table_of_momentum_dumps.csv'
 numclstr     = 300
 
@@ -35,35 +35,47 @@ if train_on_ == 'stat':
 
 # -- initialize Mergen object --------------------------------------------------
 mg = mergen(datapath, savepath, datatype, metapath=metapath,
-            parampath=parampath, featgen=featgen, clstrmeth=clstrmeth,
+            featgen=featgen, clstrmeth=clstrmeth,
             mdumpcsv=mdumpcsv, numclstr=numclstr, name=train_on_)
+# parampath=parampath
 
 if train_on_ == 'lspm':
     fe.load_lspgram_fnames(mg, timescale=timescale) 
 if train_on_ == 'stat':
     fe.load_stats(mg, timescale=timescale)
 
-mg.generate_features() # >> feature extraction by deep autoencoder
+# !! tmp
+txt = np.loadtxt(savepath+'DAE/gmm_labels.txt')
+# ticid_cluster = txt[0].astype('int')
+# sector_cluster = []
+# for i in range(len(ticid_cluster)):
+#     if ticid_cluster[i] in mg.objid:
+#         sector_cluster.append(mg.sector[np.nonzero(mg.objid == ticid_cluster[i])])
+mg.objid = txt[0].astype('int')
+
+# mg.generate_features() # >> feature extraction by deep autoencoder
 # lt.save_autoencoder_products(parampath=mg.parampath,
 #                              output_dir=mg.featpath+'model/',
 #                              batch_fnames=mg.batch_fnames)
 # pdb.set_trace()
 # mg.load_features()
 
-mg.generate_tsne()
+# mg.generate_tsne()
 # mg.load_tsne()
 
-
+mg.featpath = '/scratch/echickle/timescale-1sector/DAE/'
+mg.load_features()
 mg.generate_clusters()
-pdb.set_trace()
+# pdb.set_trace()
 
 # mg.load_gmm_clusters()
-mg.load_nvlty()
+# mg.load_nvlty()
 
 mg.load_true_otypes()
 
 mg.generate_predicted_otypes()
 mg.numerize_otypes()
+
 mg.load_tsne()
 
 mg.run_vis() # !! add classification plots, etc

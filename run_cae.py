@@ -8,6 +8,7 @@ Script to train a convolutional autoencoder on LS periodograms.
 
 from __init__ import *
 import feat_eng as fe
+import tensorflow as tf
 
 # -- inputs --------------------------------------------------------------------
 
@@ -29,7 +30,8 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
 fe.load_lspgram_fnames(mg, timescale=timescale)
-# mg.optimize_params()
+with tf.device('/GPU:0'):
+    mg.optimize_params()
 pdb.set_trace()
 mg.generate_features() # >> feature extraction by conv autoencoder
 
