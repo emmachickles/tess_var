@@ -174,6 +174,7 @@ def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2,
     '''Produces text file with TICIDs ranked by the number of data points masked
     during sigma clipping, and a histogram of those numbers.'''
 
+    import pandas as pd
     sectors = os.listdir(mg.datapath+'clip/')
     sectors.sort()
     savepath = mg.savepath + 'clip/hists/'

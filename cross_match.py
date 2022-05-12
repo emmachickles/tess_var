@@ -45,6 +45,10 @@
 
 from __init__ import *
 
+import astropy.coordinates as coord
+import astropy.units as u
+from astroquery.simbad import Simbad
+
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 # :: Query catalogs ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::

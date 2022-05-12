@@ -13,10 +13,10 @@ import tensorflow as tf
 # -- inputs --------------------------------------------------------------------
 
 timescale    = 1 # >> number of sectors (1, 6, or 13)
-savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
+savepath     = '/work/submit/echickle/timescale-'+str(timescale)+'sector/'
 dt.create_dir(savepath)
 
-datapath     = '/scratch/data/tess/lcur/spoc/'
+datapath     = '/work/submit/echickle/data/'
 metapath     = '/scratch/data/tess/meta/'
 datatype     = 'SPOC'
 featgen      = 'CAE'
@@ -30,10 +30,10 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
 fe.load_lspgram_fnames(mg, timescale=timescale)
-with tf.device('/GPU:0'):
-    mg.optimize_params()
-pdb.set_trace()
+# with tf.device('/GPU:0'):
+#     mg.optimize_params()
+# pdb.set_trace()
 mg.generate_features() # >> feature extraction by conv autoencoder
 
-pdb.set_trace()
-mg.generate_clusters()
+# pdb.set_trace()
+# mg.generate_clusters()

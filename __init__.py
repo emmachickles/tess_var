@@ -3,7 +3,7 @@
 """
 
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 
@@ -11,10 +11,6 @@ import os
 import gc
 import pdb
 import sys
-
-import astropy.coordinates as coord
-import astropy.units as u
-from astroquery.simbad import Simbad
 
 # >> add working directory to path (assumes mergen, ephesus in wd)
 sys.path.append(os.getcwd())
