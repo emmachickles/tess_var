@@ -31,8 +31,8 @@
 
 from __init__ import *
 from scipy.stats import sigmaclip
-from astropy.timeseries import LombScargle
-from astropy.io import fits
+# from astropy.timeseries import LombScargle
+# from astropy.io import fits
 
 # ==============================================================================
 # ==============================================================================

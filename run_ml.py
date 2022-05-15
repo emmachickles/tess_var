@@ -18,6 +18,7 @@ dt.create_dir(savepath)
 
 datapath     = '/work/submit/echickle/data/'
 metapath     = '/scratch/data/tess/meta/'
+parampath    = '/home/submit/echickle/work/tess_var/docs/hyperparam.txt'
 datatype     = 'SPOC'
 featgen      = 'CAE'
 clstrmeth    = 'gmm'
@@ -26,12 +27,12 @@ numclstr     = 300
 
 # -- initialize Mergen object --------------------------------------------------
 mg = mergen(datapath, savepath, datatype, metapath=metapath,
-            featgen=featgen, clstrmeth=clstrmeth,
+            featgen=featgen, clstrmeth=clstrmeth, parampath=parampath,
             mdumpcsv=mdumpcsv, numclstr=numclstr)
 
 fe.load_lspgram_fnames(mg, timescale=timescale)
 # with tf.device('/GPU:0'):
-#     mg.optimize_params()
+# mg.optimize_params()
 # pdb.set_trace()
 mg.generate_features() # >> feature extraction by conv autoencoder
 
