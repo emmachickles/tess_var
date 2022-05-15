@@ -24,11 +24,12 @@ featgen      = 'CAE'
 clstrmeth    = 'gmm'
 mdumpcsv     = '/scratch/data/tess/meta/Table_of_momentum_dumps.csv'
 numclstr     = 300
+name         = 'cvae-lspm'
 
 # -- initialize Mergen object --------------------------------------------------
 mg = mergen(datapath, savepath, datatype, metapath=metapath,
             featgen=featgen, clstrmeth=clstrmeth, parampath=parampath,
-            mdumpcsv=mdumpcsv, numclstr=numclstr)
+            mdumpcsv=mdumpcsv, numclstr=numclstr, name=name)
 
 fe.load_lspgram_fnames(mg, timescale=timescale)
 # with tf.device('/GPU:0'):

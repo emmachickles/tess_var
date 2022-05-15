@@ -14,7 +14,7 @@ optimizer: adam
 last_activation: linear
 loss: mean_squared_error
 lr: 0.00001
-initializer: random_uniform
+initializer: zeros
 num_consecutive: 2
 pool_size: 2
 pool_strides: 2
