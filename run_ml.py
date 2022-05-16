@@ -33,9 +33,9 @@ mg = mergen(datapath, savepath, datatype, metapath=metapath,
 
 fe.load_lspgram_fnames(mg, timescale=timescale)
 # with tf.device('/GPU:0'):
-# mg.optimize_params()
+mg.optimize_params()
 # pdb.set_trace()
-mg.generate_features() # >> feature extraction by conv autoencoder
+# mg.generate_features() # >> feature extraction by conv autoencoder
 
 # pdb.set_trace()
 # mg.generate_clusters()
