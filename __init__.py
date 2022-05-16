@@ -15,16 +15,19 @@ import pdb
 import sys
 
 # >> add working directory to path (assumes mergen, ephesus in wd)
-sys.path.append(os.getcwd())
+# sys.path.append(os.getcwd())
+sys.path.insert(0, os.getcwd())
 
-# from mergen import mergen # >> library for unsupervised learning in astro
-# from mergen import learn_utils as lt
-# from mergen import plot_utils  as pt
-# from mergen import data_utils  as dt
 
-from mergen.mergen import learn_utils as lt
-from mergen.mergen import plot_utils as pt
-from mergen.mergen import data_utils as dt
-from mergen.mergen import mergen
+if os.getcwd()+'/mergen' in sys.path:
+    from mergen import mergen # >> library for unsupervised learning in astro
+    from mergen import learn_utils as lt
+    from mergen import plot_utils  as pt
+    from mergen import data_utils  as dt
+else:
+    from mergen.mergen import learn_utils as lt
+    from mergen.mergen import plot_utils as pt
+    from mergen.mergen import data_utils as dt
+    from mergen.mergen import mergen
 
 
