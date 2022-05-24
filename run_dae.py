@@ -23,7 +23,7 @@ metapath = '/scratch/data/tess/meta/'
 
 datatype     = 'SPOC'
 featgen      = 'DAE'
-clstrmeth    = 'hdbscan'
+clstr    = 'gmm'
 # clstrmeth    = 'gmm'
 mdumpcsv     = '/scratch/data/tess/meta/Table_of_momentum_dumps.csv'
 numclstr     = 300
@@ -35,7 +35,7 @@ if train_on_ == 'stat':
 
 # -- initialize Mergen object --------------------------------------------------
 mg = mergen(datapath, savepath, datatype, metapath=metapath,
-            featgen=featgen, clstrmeth=clstrmeth,
+            featgen=featgen, clstrmeth='gmm',
             mdumpcsv=mdumpcsv, numclstr=numclstr, name=train_on_)
 # parampath=parampath
 
@@ -45,7 +45,8 @@ if train_on_ == 'stat':
     fe.load_stats(mg, timescale=timescale)
 
 # !! tmp
-txt = np.loadtxt(savepath+'DAE/gmm_labels.txt')
+mg.featpath = '/scratch/echickle/timescale-1sector/DAE/'
+txt = np.loadtxt(mg.featpath+'gmm_labels.txt')
 # ticid_cluster = txt[0].astype('int')
 # sector_cluster = []
 # for i in range(len(ticid_cluster)):
@@ -63,16 +64,24 @@ mg.objid = txt[0].astype('int')
 # mg.generate_tsne()
 # mg.load_tsne()
 
-mg.featpath = '/scratch/echickle/timescale-1sector/DAE/'
 mg.load_features()
-mg.generate_clusters()
+# mg.generate_clusters()
 # pdb.set_trace()
 
 # mg.load_gmm_clusters()
 # mg.load_nvlty()
 
-mg.load_true_otypes()
+# from sklearn.manifold import TSNE
+# X = TSNE(n_components=3).fit_transform(mg.feats)
+# np.save(mg.featpath+'tsne_dim3.npy', X)
+X = np.load(mg.featpath+'tsne_dim3.npy')
 
+mg.load_true_otypes()
+print('plot')
+prefix = 'true_'
+pt.plot_tsne(mg.feats, mg.numtot, X=X, output_dir=mg.featpath, prefix=prefix, animate=True, otypedict=mg.otdict)
+
+pdb.set_trace()
 mg.generate_predicted_otypes()
 mg.numerize_otypes()
 
