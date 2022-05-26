@@ -16,7 +16,7 @@ import tensorflow as tf
 
 timescale    = 1 # >> number of sectors (1, 6, or 13)
 
-machine      = 'uzay'
+machine      = 'submit'
 
 if machine == 'uzay':
     savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
@@ -56,5 +56,6 @@ fe.load_lspgram_fnames(mg, timescale=timescale)
 # mg.generate_features(save=False) # >> feature extraction by conv autoencoder
 # mg.save_ae_features(reconstruct=False)
 
+mg.load_features()
 mg.generate_tsne()
 mg.generate_clusters()
