@@ -16,7 +16,7 @@ import tensorflow as tf
 
 timescale    = 1 # >> number of sectors (1, 6, or 13)
 
-machine      = 'submit'
+machine      = 'uzay'
 
 if machine == 'uzay':
     savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
@@ -30,26 +30,30 @@ if machine == 'uzay':
     
 
 elif machine == 'submit':
-
     savepath     = '/work/submit/echickle/timescale-'+str(timescale)+'sector/'
     dt.create_dir(savepath)
 
     datapath     = '/work/submit/echickle/data/'
+    metapath     = None
+    mdumpcsv     = None
+
     parampath    = '/home/submit/echickle/work/tess_var/docs/hyperparam.txt'
 
 datatype     = 'SPOC'
 featgen      = 'CAE'
 clstrmeth    = 'gmm'
 numclstr     = 300
+train_on_    = 'lspm'
 
 # -- initialize Mergen object --------------------------------------------------
 mg = mergen(datapath, savepath, datatype,  parampath=parampath,
             featgen=featgen, clstrmeth=clstrmeth,
-            numclstr=numclstr)
+            numclstr=numclstr, name=train_on_, metapath=metapath,
+            mdumpcsv=mdumpcsv)
 
 fe.load_lspgram_fnames(mg, timescale=timescale)
-print(mg.batch_fnames)
 # mg.optimize_params()
-mg.generate_features() # >> feature extraction by conv autoencoder
+# mg.generate_features(save=False) # >> feature extraction by conv autoencoder
+mg.save_ae_features()
 
 # mg.generate_clusters()
