@@ -16,7 +16,7 @@ import sys
 
 # >> add working directory to path (assumes mergen, ephesus in wd)
 # sys.path.append(os.getcwd())
-sys.path.insert(0, os.getcwd())
+# sys.path.insert(0, os.getcwd())
 
 
 if os.getcwd()+'/mergen' in sys.path:
