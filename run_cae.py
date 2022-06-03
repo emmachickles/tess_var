@@ -63,7 +63,12 @@ mg.load_features()
 
 mg.load_tsne()
 mg.load_gmm_clusters()
-# mg.load_true_otypes()
+
+mg.load_true_otypes() # >> return numtot, otdict
+mg.generate_predicted_otypes()
+rec, fdr, pre, acc, cnts_true, cnts_pred = pt.evaluate_classifications(mg.cm)
+
+# mg.numerize_otypes()
 # 
 # mg.numerize_otypes()
 # mg.produce_clustering_visualizations()
@@ -103,9 +108,23 @@ mg.load_gmm_clusters()
 #              prefix=prefix, otypedict=cotd, alpha =1,
 #              class_marker='x', class_ms=20, objid=mg.objid,
 #              plot_insets=True, lcpath=mg.datapath+'clip/', inset_label=1)
- 
-for i in range(10):
-    prefix = 'zoom_'+str(i)+'_'
+
+# # >> random
+# for i in range(10):
+#     prefix = 'zoom_'+str(i)+'_'
+#     pt.plot_tsne(mg.feats, mg.clstr, X=mg.tsne, output_dir=mg.featpath+'imgs/',
+#                  prefix=prefix, objid=mg.objid, 
+#                  lcpath=mg.datapath+'clip/', zoom=True)
+
+# >> cluster centers (mean of all positions of cluster members)
+for i in np.unique(mg.clstr):
+    prefix = 'zoom_clstr'+str(i)+'_'
+    inds = np.nonzero(mg.clstr == i)
+    # centr = np.mean(mg.feats[inds], axis=0)
+    centr = np.median(mg.feats[inds], axis=0)
+    centr_ind = np.argmin(np.sum((mg.feats[inds]-centr)**2, axis=1))
     pt.plot_tsne(mg.feats, mg.clstr, X=mg.tsne, output_dir=mg.featpath+'imgs/',
                  prefix=prefix, objid=mg.objid, 
-                 lcpath=mg.datapath+'clip/', zoom=True)
+                 lcpath=mg.datapath+'clip/', zoom=True, zoom_ind=centr_ind,
+                 numtot=mg.numtot, otdict=mg.otdict)
+
