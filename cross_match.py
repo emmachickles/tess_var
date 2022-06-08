@@ -761,7 +761,7 @@ def make_redundant_otype_dict():
     return d, parents, subclasses
 
 
-def merge_otype(otype_list, debug=True):
+def merge_otype(otype_list, debug=False):
 
     # >> merge classes
     parent_dict, parents, subclasses = make_parent_dict()
@@ -936,7 +936,7 @@ def make_remove_class_list(catalog='', rmv_flagged=True):
     #             'DNe', 'ClG', 'Bla', 'BH', 'QSO', 'Neu']
 
     non_star = ['PoC', 'RNe', 'RB', 'OpC', 'LSB', 'ISM', 'GiP', 'GiC' , 'EmG',
-                'DNe', 'ClG', 'BH', 'Neu', 'LSB', 'RB']
+                'DNe', 'ClG', 'BH', 'Neu', 'LSB']
 
     not_descriptive = ['ev', 'W', 'RRD', 'RO', 'Q', 'HX', 'HH', 'HADS', 'Bz', 'BL', 'B',
                        'PM', 'nan', 'V', 'VAR', 'HV', 'mul']
