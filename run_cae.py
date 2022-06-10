@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 timescale    = 1 # >> number of sectors (1, 6, or 13)
 
-machine      = 'submit'
+machine      = 'uzay'
 
 if machine == 'uzay':
     savepath     = '/scratch/echickle/timescale-'+str(timescale)+'sector/'
@@ -43,7 +43,7 @@ elif machine == 'submit':
 datatype     = 'SPOC'
 featgen      = 'CAE'
 clstrmeth    = 'gmm'
-numclstr     = 300
+numclstr     = 100
 train_on_    = 'lspm'
 # train_on_ = 'unreg-lspm'
 
@@ -57,22 +57,26 @@ fe.load_lspgram_fnames(mg, timescale=timescale)
 # mg.optimize_params()
 # mg.generate_features(save=False) # >> feature extraction by conv autoencoder
 # mg.save_ae_features(reconstruct=False)
-
 # lt.save_autoencoder_products(batch_fnames=mg.batch_fnames, parampath=parampath,
 #                              output_dir=mg.featpath+'model/')
 
 mg.load_features()
 # mg.generate_tsne()
+
+mg.load_tsne()
+# mg.numclstr = None
 # mg.generate_clusters()
-# mg.load_tsne()
 mg.load_gmm_clusters()
 
-mg.load_true_otypes() # >> return numtot, otdict
-mg.generate_predicted_otypes()
-rec, fdr, pre, acc, cnts_true, cnts_pred = mg.evaluate_classification()
+mg.load_true_otypes() 
+# mg.generate_predicted_otypes()
+
+
+
+# rec, fdr, pre, acc, cnts_true, cnts_pred = mg.evaluate_classification()
 
 # mg.numerize_otypes()
 # mg.produce_clustering_visualizations()
-# mg.run_vis()
+mg.run_vis()
 
 # lt.label_clusters_2(mg)
