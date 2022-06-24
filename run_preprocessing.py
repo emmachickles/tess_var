@@ -23,14 +23,9 @@ target_prep  = False # >> preprocess a single target
 diag_only    = False # >> produce diagnostic plots
 
 # >> inputs
-datapath     = '/scratch/data/tess/lcur/spoc/'
-savepath     = '/scratch/echickle/'
-metapath     = '/scratch/data/tess/meta/'
-datatype     = 'SPOC'
-mdumpcsv     = '/scratch/data/tess/meta/Table_of_momentum_dumps.csv'
 n_sigma      = 7
 plot         = True
-featgen      = 'CAE'
+setup        = '/home/echickle/work/tess_var/setup.txt'
 
 # >> prepare specified targets (if target_prep = True)
 # targets      = [31850842] # 
@@ -56,8 +51,7 @@ print(sectors)
 # ------------------------------------------------------------------------------
 
 # >> Initialize Mergen object
-mg = mergen(datapath, savepath, datatype, metapath=metapath,
-            mdumpcsv=mdumpcsv, featgen=featgen)
+mg = mergen(setup=setup)
 
 # >> Perform preprocessing for all SPOC data 
 if prep_spoc:
@@ -65,12 +59,14 @@ if prep_spoc:
     # fe.sigma_clip_data(mg) # >> sigma clip
 
     # >> short timescale (1 month)
-    # fe.calc_lspgram_sing_sector(mg, sectors=sectors, overwrite=True) 
+    # fe.calc_lspgram_avg_sector(mg, sectors=sectors, overwrite=True) 
     # fe.preprocess_lspgram(mg, timescale=1)
     # fe.calc_stats(datapath, timescale=1, savepath=savepath)
 
-    # fe.test_simulated_data(savepath, datapath, timescale=1)
+    fe.calc_lspm_mult_sector(mg, sectors=sectors, timescale=1)
     pdb.set_trace()
+
+    # fe.test_simulated_data(savepath, datapath, timescale=1)
 
     # >> medium timescale (6 months, 19366 targets in S1-26 2-min)
     fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=6)

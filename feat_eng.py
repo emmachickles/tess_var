@@ -15,7 +15,7 @@
 # LS Periodograms
 #   * compute_ls_pgram_data             LS-Periodograms from light curves
 #     * compute_ls_pgram
-#     * preprocess_lspgram              Prepare for ML
+#     * preprocess_lspm              Prepare for ML
 # Phase Curve Features
 #   * create_phase_curve_feats
 #     * mask_harmonics
@@ -329,9 +329,11 @@ def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
         fnames.extend([lcpath+s+'/'+f for f in \
                        os.listdir(lcpath+s) \
                        if str(ticid) in f])
+    sectors = [int(f.split('/')[-2][-2:]) for f in fnames]
 
     if type(sector) != type(None):
         fnames = [lcpath+'sector-%02d'%sector+'/'+str(ticid)+'.fits']
+        sectors = [sector]
 
     t, y = [], []
     for fname in fnames:
@@ -373,7 +375,7 @@ def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
 
     if timescale == 1:
         if return_sector:
-            return t, y
+            return t, y, sectors
         t, y = np.concatenate(t), np.concatenate(y)
     else:
         t = np.concatenate(t[:timescale])
@@ -384,7 +386,29 @@ def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
         t=t[inds]
         y=y[inds]
 
-    return t, y
+    if return_sector:
+        return t, y, sectors
+    else:
+        return t, y
+
+def load_lc_fnames(mg, sectors=[]):
+    # -- get list of sectors ---------------------------------------------------
+    if len(sectors) == 0:
+        sectors = os.listdir(mg.datapath+'clip/') # >> sigma clipped
+        sectors.sort()
+
+    # -- find TICIDs that were observed in timescale or more sectors -----------
+    fnames = []
+    for sector in sectors:
+        fnames.extend([mg.datapath+'clip/'+sector+'/'+f for f in\
+                       os.listdir(mg.datapath+'clip/'+sector+'/')])
+    fnames.sort()
+
+    ticid = []
+    for f in fnames:
+        ticid.append(f.split('/')[-1][:-5])
+    
+    return ticid, fnames
 
 # ==============================================================================
 # ==============================================================================
@@ -394,158 +418,40 @@ def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
 
 # -- LS Periodograms -----------------------------------------------------------
 
-def calc_lspgram_sing_sector(mg, plot=True, plot_int=200, sectors=[],
-                             n0=6, overwrite=True, report_time=True):
-    """Compute LS-periodograms with a baseline of a single observational sector 
-    (~27 days). Periodograms for stars that are observed in multiple sectors are
-    averaged for each frequency bin.
-    * mg : Mergen object
-    * n0 : oversampling factor
-    """
-
-    # -- get light curve file names --------------------------------------------
-
-    if len(sectors) == 0:
-        sectors = os.listdir(mg.datapath+'clip/') # >> sigma clipped light
-                                                  # >> curves
-        sectors.sort()
-
-    ticid = []
-    fnames = []
-    for sector in sectors:
-        fnames.extend([mg.datapath+'clip/'+sector+'/'+f for f in\
-                       os.listdir(mg.datapath+'clip/'+sector+'/')])
-        ticid.extend([int(f[:-5]) for f in \
-                      os.listdir(mg.datapath+'clip/'+sector+'/')])
-    fnames.sort()
-
-    # -- set up output directories ---------------------------------------------
-
-    dt.create_dir(mg.savepath+'timescale-1sector/')
-    savepath = mg.savepath+'timescale-1sector/lspm/'
-    dt.create_dir(savepath)
-    dt.create_dir(savepath+'preprocess/')
-    dt.create_dir(savepath+'avg/')
-    dt.create_dir(mg.datapath+'timescale-1sector/')
-    lspmpath = mg.datapath+'timescale-1sector/lspm/'
-    dt.create_dir(lspmpath)
-
-    # -- determine suitable frequency grid -------------------------------------
-    
-    f0_avg = [] # >> average sampling rates
-    T = [] # >> baselines
-    for lcfile in fnames[::5000]:
-        data, meta = dt.open_fits(fname=lcfile)
-        time = data['TIME']
-        inds = np.nonzero(~np.isnan(time))
-        f0_avg.append(1/np.mean(np.diff(time[inds]))) # >> avg sampling rate
-        T.append(time[inds][-1]-time[inds][0]) # >> baseline
-
-    f_ny = 0.5*np.mean(f0_avg) # >> average nyquist frequency : 1/2 of average
-                               # >> sampling rate
-    T_avg = np.mean(T) # >> average baseline
-
-    # >> frequency grid:
-    min_freq = 2/T_avg
-    max_freq = f_ny/2
-    df = 1/(n0*T_avg)
-    with open(savepath+'frequency_grid.txt', 'w') as f:
-        f.write('min_freq,'+str(min_freq)+'\n')
-        f.write('max_freq,'+str(max_freq)+'\n')
-        f.write('df,'+str(df)+'\n')
-
-    # -- find TICIDs observed in multiple sectors ------------------------------
-
-    uniq_ticid, counts = np.unique(ticid, return_counts=True)
-    mult_obs = uniq_ticid[np.nonzero(counts>1)]    
-
-    # -- compute LS periodograms -----------------------------------------------
-    for i in range(len(fnames)):
-
-        if report_time and i % plot_int == 0:
-            from datetime import datetime
-            start = datetime.now()
-
-        lcfile = fnames[i]
-
-        ticid_lc = int(lcfile.split('/')[-1][:-5])
-        # lcfiles = [lcfile]
-        # if ticid_lc in mult_obs:
-        #     lcfiles = [f for f in fnames if str(ticid_lc) in f]
-
-        if i % plot_int == 0:
-            print('Computing LS periodogram of light curve '+str(i)+'/'+\
-                  str(len(fnames)))
-            if plot: plot_pgram = True
-            verbose = True
-            gc.collect()
-        else:
-            plot_pgram = False
-            verbose = False
-
-        if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits'):
-            pass
-        else:
-            calc_ls_pgram(mg, ticid_lc, plot=plot_pgram, verbose=verbose,
-                          min_freq=min_freq, max_freq=max_freq, df=df, 
-                          timescale=1, savepath=savepath, lspmpath=lspmpath)
-
-
-        if report_time and i % plot_int == 0:
-            end = datetime.now()
-            dur_sec = (end-start).total_seconds()
-            print('Time to produce LS-periodogram: '+str(dur_sec))
-
-
-
-def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
-                             n0=6, timescale=6, overwrite=False,
-                             report_time=True):
-
-    if len(sectors) == 0:
-        sectors = os.listdir(mg.datapath+'clip/') # >> sigma clipped light
-                                                  # >> curves
-        sectors.sort()
-
-    # -- find TICIDs that were observed in 6 or more sectors -------------------
-
-    ticid = []
-    fnames = []
-    for sector in sectors:
-        fnames.extend([mg.datapath+'clip/'+sector+'/'+f for f in\
-                       os.listdir(mg.datapath+'clip/'+sector+'/')])
-        ticid.extend([int(f[:-5]) for f in \
-                      os.listdir(mg.datapath+'clip/'+sector+'/')])
-    fnames.sort()
-
-    unq_ticid, counts = np.unique(ticid, return_counts=True)
-    inds = np.nonzero(counts >= timescale)
-    ticid = np.array(unq_ticid)[inds]
-
-    print('Number of TICIDs: '+str(len(ticid)))
-
-    # -- set up output directories ---------------------------------------------
+def make_lspm_dirs(mg, timescale=1):
     dt.create_dir(mg.savepath+'timescale-'+str(timescale)+'sector/')
     savepath = mg.savepath+'timescale-'+str(timescale)+'sector/lspm/'
     dt.create_dir(savepath)
     dt.create_dir(savepath+'preprocess/')
-    # dt.create_dir(savepath+'concat/')
+    dt.create_dir(savepath+'avg/')
     dt.create_dir(mg.datapath+'timescale-'+str(timescale)+'sector/')
     lspmpath = mg.datapath+'timescale-'+str(timescale)+'sector/lspm/'
     dt.create_dir(lspmpath)
+    return savepath, lspmpath
 
-    # -- determine suitable frequency grid -------------------------------------
+def make_lspm_freq(fnames, savepath, timescale=1, n_check=500, n0=6):
+    '''Determine a suitable frequency grid.'''
 
     f0_avg = [] # >> average sampling rates
     T = [] # >> baselines
 
-    for ticid_lc in ticid[::200]:
-        lcfiles = [f for f in fnames if str(ticid_lc) in f][:timescale]
-        time = []
-        for lcfile in lcfiles: 
+    n_div = len(fnames) // n_check
+
+    for lcfile in fnames[::n_div]:
+
+        # >> load time array
+        if timescale == 1:
             data, meta = dt.open_fits(fname=lcfile)
-            time.append(data['TIME'])
-        time = np.concatenate(time)
+            time = data['TIME']
+        else: # >> multiple sectors
+            ticid = lcfile.split('/')[-1].split('.')[0]
+            f_ticid = [f for f in fnames if str(ticid) in f][:timescale]
+            time = []
+            for f in f_ticid: 
+                data, meta = dt.open_fits(fname=f)
+                time.append(data['TIME'])
+            time = np.concatenate(time)
+
         inds = np.nonzero(~np.isnan(time))
         f0_avg.append(1/np.mean(np.diff(time[inds]))) # >> avg sampling rate
         T.append(time[inds][-1]-time[inds][0]) # >> baseline
@@ -563,8 +469,98 @@ def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
         f.write('max_freq,'+str(max_freq)+'\n')
         f.write('df,'+str(df)+'\n')
 
-    print('Min period: '+str(np.round(1/max_freq * 1440)) + ' minutes')
-    print('Max period: '+str(np.round(1/min_freq)) + ' days')
+    freq = np.arange(min_freq, max_freq, df)
+
+    return freq
+
+# def calc_lspm_avg_sector(mg, plot=True, plot_int=200, sectors=[],
+#                             n0=6, overwrite=True, report_time=True):
+#     """Compute LS-periodograms with a baseline of a single observational sector 
+#     (~27 days). Periodograms for stars that are observed in multiple sectors are
+#     averaged for each frequency bin.
+#     * mg : Mergen object
+#     * n0 : oversampling factor
+#     """
+
+#     # >> get light curve filenames
+#     sectors, ticid, fnames = load_lc_fnames(mg, sectors)
+
+#     # >> set up output directories
+#     savepath, lspmpath = make_lspm_dirs(mg, timescale)
+
+#     # >> determine suitable frequency grid
+#     min_freq, max_freq, df = make_lspm_freq(fnames, savepath)
+
+#     # -- find TICIDs observed in multiple sectors ------------------------------
+#     uniq_ticid, counts = np.unique(ticid, return_counts=True)
+#     mult_obs = uniq_ticid[np.nonzero(counts>1)]    
+
+#     # -- compute LS periodograms -----------------------------------------------
+#     for i in range(len(fnames)):
+
+#         if report_time and i % plot_int == 0:
+#             from datetime import datetime
+#             start = datetime.now()
+
+#         lcfile = fnames[i]
+
+#         ticid_lc = int(lcfile.split('/')[-1][:-5])
+#         # lcfiles = [lcfile]
+#         # if ticid_lc in mult_obs:
+#         #     lcfiles = [f for f in fnames if str(ticid_lc) in f]
+
+#         if i % plot_int == 0:
+#             print('Computing LS periodogram of light curve '+str(i)+'/'+\
+#                   str(len(fnames)))
+#             if plot: plot_pgram = True
+#             verbose = True
+#             gc.collect()
+#         else:
+#             plot_pgram = False
+#             verbose = False
+
+#         if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits'):
+#             pass
+#         else:
+#             calc_ls_pgram(mg, ticid_lc, plot=plot_pgram, verbose=verbose,
+#                           min_freq=min_freq, max_freq=max_freq, df=df, 
+#                           timescale=1, savepath=savepath, lspmpath=lspmpath)
+
+
+#         if report_time and i % plot_int == 0:
+#             end = datetime.now()
+#             dur_sec = (end-start).total_seconds()
+#             print('Time to produce LS-periodogram: '+str(dur_sec))
+
+
+
+def calc_lspm_mult_sector(mg, plot=True, plot_int=200, sectors=[], n0=6,
+                          timescale=6, overwrite=False, report_time=True,
+                          avg=False):
+    """Compute LS-periodograms with baselines determined by the timescale arg
+    (in units of number of sectors, ~27 days each).
+    * mg : Mergen object
+    * n0 : oversampling factor
+    * avg : returns periodograms with baseline of one observational sector
+            takes average for each frequency bin if star observed in multiple
+            sectors
+    """
+
+    # >> get light curve filenames
+    ticid, fnames = load_lc_fnames(mg, sectors)
+
+    # >> set up output directories
+    savepath, lspmpath = make_lspm_dirs(mg, timescale)
+
+    # >> determine suitable frequency grid
+    freq = make_lspm_freq(fnames, savepath, timescale, n0=n0)
+    np.save(lspmpath+'freq.npy', freq)
+
+    # >> find stars observed in multiple sectors (timescale arg)
+    unq_ticid, counts = np.unique(ticid, return_counts=True)
+    inds = np.nonzero(counts >= timescale)
+    ticid = np.array(unq_ticid)[inds]
+    print('Number of TICIDs: '+str(len(ticid)))
 
     # -- compute LS periodograms -----------------------------------------------
     for i in range(len(ticid)):
@@ -572,68 +568,68 @@ def calc_lspgram_mult_sector(mg, plot=True, plot_int=200, sectors=[],
         if report_time and i % plot_int == 0:
             from datetime import datetime
             start = datetime.now()
-
-        ticid_lc = int(ticid[i])
-        # lcfiles = [f for f in fnames if str(ticid_lc) in f][:timescale]
-
-        if i % plot_int == 0:
             print('Computing LS periodogram of light curve '+str(i)+'/'+\
                   str(len(ticid)))
             if plot: plot_pgram = True
             verbose = True
-        else:
+        else: 
             plot_pgram = False
             verbose = False
 
-        # !! tmp
+        ticid_lc = int(ticid[i])
+
+        # >> calculate LS periodogram
         if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits') \
            and not plot_pgram:
             pass
         else:
-            calc_ls_pgram(mg, ticid_lc, plot=plot_pgram, 
-                             min_freq=min_freq, max_freq=max_freq, df=df, 
-                             timescale=timescale, savepath=savepath, 
-                             lspmpath=lspmpath, verbose=verbose)
+            calc_lspm(mg, ticid_lc, plot=plot_pgram, timescale=timescale,
+                      freq=freq, avg=avg,
+                      savepath=savepath, lspmpath=lspmpath, verbose=verbose)
 
         if report_time and i % plot_int == 0:
             end = datetime.now()
             dur_sec = (end-start).total_seconds()
             print('Time to produce LS-periodogram: '+str(dur_sec))
 
-def calc_ls_pgram(mg, ticid, plot=False, meta=None,
-                  max_freq=1/(8/1440.), min_freq=1/12.7,
-                  df=1/(4*27.), savepath=None, lspmpath=None,
-                  verbose=True, timescale=1):
+def calc_lspm(mg, ticid, plot=False, meta=None, freq=None,
+              max_freq=1/(8/1440.), min_freq=1/12.7,
+              df=1/(4*27.), savepath=None, lspmpath=None,
+              verbose=True, timescale=1, avg=True):
     '''
     * min_freq : default it 8 minutes (~> average Nyquist frequency)
     * max_freq : default is 27 days (~ average baseline)
     * df : default
     '''
+    from astropy.timeseries import LombScargle
 
     # >> open light curve files
-    time, flux = get_lc(mg.datapath+'clip/', ticid, timescale, rmv_nan=True,
+    time, flux, sectors = get_lc(mg.datapath+'clip/', ticid, timescale, rmv_nan=True,
                         detrend=True, plot=plot, savepath=savepath,
                         return_sector=True, norm=True, method='standardize')
 
     time, flux = np.array(time), np.array(flux)
 
-    freq = np.arange(min_freq, max_freq, df)
+    if type(freq) == type(None):
+        freq = np.arange(min_freq, max_freq, df)
+        np.save(lspmpath+'freq.npy', freq)
 
-    if timescale == 1:
+    if timescale==1:
         lspm_sector = []
         for i in range(len(time)):
             num_inds = np.nonzero(~np.isnan(flux[i]))
-            lspm_sector.append(LombScargle(time[i][num_inds],
-                                           flux[i][num_inds]).power(freq))
-        lspm = np.median(lspm_sector, axis=0)
+            lspm = LombScargle(time[i][num_inds], flux[i][num_inds]).power(freq)
+            lspm_sector.append(lspm)
+            if not avg:
+                np.save(lspmpath+str(ticid)+'-s%02d'%sectors[i]+'.npy', lspm)
+        if avg:
+            lspm = np.median(lspm_sector, axis=0)
+            np.save(lspmpath+str(ticid)+'.npy', lspm)
     else:
         num_inds = np.nonzero(~np.isnan(flux))
         lspm = LombScargle(time[num_inds],
                            flux[num_inds]).power(freq)
-
-    # >> save periodogram
-    dt.write_fits(lspmpath, meta, [freq, lspm], ['FREQ', 'LSPM'],
-                  verbose=verbose, fname=str(ticid)+'.fits')
+        np.save(lspmpath+str(ticid)+'.npy', lspm)
 
     gc.collect()
 
@@ -681,7 +677,7 @@ def calc_ls_pgram(mg, ticid, plot=False, meta=None,
         plot_lspm(ax[-1,0], freq, lspm)
         ax[-1,1].axis('off')
         fig.tight_layout()
-        fname = savepath+'avg/lspgram_avg_TIC'+str(ticid)+'.png'
+        fname = savepath+'avg/lspm_avg_TIC'+str(ticid)+'.png'
         fig.savefig(fname)
         print('Saved '+fname)
         plt.close(fig)
@@ -699,7 +695,7 @@ def calc_ls_pgram(mg, ticid, plot=False, meta=None,
     #                      '_'.join(np.array(sector_tic).astype('str')))
     #     plot_lspm(ax[-1], freq, lspm)
     #     fig.tight_layout()
-    #     fname = savepath+'concat/lspgram_concat_TIC'+str(ticid)+'.png'
+    #     fname = savepath+'concat/lspm_concat_TIC'+str(ticid)+'.png'
     #     fig.savefig(fname)
     #     print('Saved '+fname)
     #     plt.close(fig)
@@ -744,7 +740,7 @@ def local_std(x, y, kernel):
     std = np.mean(local_std)
     return std
 
-def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
+def preprocess_lspm(mg, n_chunk=10, plot_int=1000,
                        timescale=1):
 
     lspmpath = mg.datapath+'timescale-'+str(timescale)+'sector/lspm/'
@@ -764,11 +760,11 @@ def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
         else:
             fnames_chunk = fnames[n*(len(fnames)//n_chunk):\
                                   (n+1)*(len(fnames)//n_chunk)]
-        lspgram, sector, ticid = [], [], []
+        lspm, sector, ticid = [], [], []
         for i in range(len(fnames_chunk)):
             with fits.open(fnames_chunk[i], memmap=False) as hdul:
                 freq = hdul[1].data['FREQ']
-                lspgram.append(hdul[1].data['LSPM'].astype(np.float32))
+                lspm.append(hdul[1].data['LSPM'].astype(np.float32))
                 # sector.append(hdul[0].header['SECTOR'])
                 tic = int(fnames_chunk[i].split('/')[-1].split('.')[0])
                 ticid.append(tic)
@@ -795,24 +791,24 @@ def preprocess_lspgram(mg, n_chunk=10, plot_int=1000,
                 plt.close(fig)
 
         # >> convert lists to numpy arrays
-        trunc = np.min([len(l) for l in lspgram]) # !! hard code
-        lspgram = [l[:trunc] for l in lspgram] # !! hard code
-        lspgram  = np.array(np.stack(lspgram))
+        trunc = np.min([len(l) for l in lspm]) # !! hard code
+        lspm = [l[:trunc] for l in lspm] # !! hard code
+        lspm  = np.array(np.stack(lspm))
         sector, ticid = np.array(sector), np.array(ticid)
 
         # >> standardize # >> drives most values negative
-        # lspgram = dt.standardize(lspgram, ax=1)
+        # lspm = dt.standardize(lspm, ax=1)
 
         # >> normalize
-        lspgram = dt.normalize_minmax(lspgram, new_min=-1., new_max=1.)
+        lspm = dt.normalize_minmax(lspm, new_min=-1., new_max=1.)
 
         # >> save
-        np.save(datapath+'chunk%02d'%n+'_train_lspm.npy', lspgram)
+        np.save(datapath+'chunk%02d'%n+'_train_lspm.npy', lspm)
         np.save(datapath+'chunk%02d'%n+'_train_sector.npy', sector)
         np.save(datapath+'chunk%02d'%n+'_train_ticid.npy', ticid)
         np.save(datapath+'chunk%02d'%n+'_train_freq.npy', freq)
 
-def load_lspgram_fnames(mg, timescale=1):
+def load_lspm_fnames(mg, timescale=1):
     path = mg.datapath+'timescale-'+str(timescale)+'sector/ae/'
     n_chunks = max([int(f[5:7]) for f in os.listdir(path) if 'chunk' in f])+1
     
@@ -827,7 +823,7 @@ def load_lspgram_fnames(mg, timescale=1):
     mg.objid = np.array(mg.objid).astype('int')
     mg.x_train = None
         
-def load_lspgram(mg, timescale=1):
+def load_lspm(mg, timescale=1):
     path = mg.datapath+'timescale-'+str(timescale)+'sector/ae/'
     n_chunks = max([int(f[5:7]) for f in os.listdir(path) if 'chunk' in f])+1
     
