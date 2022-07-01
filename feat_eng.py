@@ -88,29 +88,33 @@ def sigma_clip_data(mg, plot=True, plot_int=200, n_sigma=7,
 def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
                   timescaldtrn=1/24., savepath=None):
 
-    import ephesus.ephesus.util as ephesus # >> exoplanet science library
+    import ephesus.util as ephesus # >> exoplanet science library
 
     if type(savepath) == type(None):
         savepath = mg.savepath + 'clip/' + sector + '/'
 
     # >> load light curve
-    data, meta = dt.open_fits(fname=lcfile)
-    time = data['TIME']
-    flux = data['FLUX']
+    data = np.load(lcfile)
+    time, flux = data[0], data[1]
+    # data, meta = dt.open_fits(fname=lcfile)
+    # time = data['TIME']
+    # flux = data['FLUX']
 
     # >> initialize variables 
     n_clip = 1 # >> number of data points clipped in an iteration
     n_iter = 0 # >> number of iterations
     flux_clip = np.copy(flux) # >> initialize sigma-clipped flux
 
-    if plot:
-        # title='n_sigma: {}, timescaldtrn: {:.2f} hr'.format(n_sigma,
-        #                                                     timescaldtrn*24)
-        title='n_sigma: '+str(n_sigma)+' timescaldtrn: '+\
-            str(np.round(timescaldtrn*24, 3))+'hr'
-        prefix='sigmaclip_'
-        pt.plot_lc(time, flux, lcfile, prefix=prefix, title=title,
-                   suffix='_niter0', mdumpcsv=mg.mdumpcsv, output_dir=savepath)
+    # if plot:
+    #     # title='n_sigma: {}, timescaldtrn: {:.2f} hr'.format(n_sigma,
+    #     #                                                     timescaldtrn*24)
+    #     title='n_sigma: '+str(n_sigma)+' timescaldtrn: '+\
+    #         str(np.round(timescaldtrn*24, 3))+'hr'
+    #     prefix='sigmaclip_'
+    #     ticid = int(lcfile.split('/')[-1].split('.')[0])
+    #     sector = int(lcfile.split('/')[-2].split('-')[1])
+    #     pt.plot_lc(ticid, sector, prefix=prefix, title=title,
+    #                suffix='_niter0', mdumpcsv=mg.mdumpcsv, output_dir=savepath)
 
     while n_clip > 0:
 
@@ -138,15 +142,15 @@ def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
         flux_clip[num_indx[0][clip_indx]] = np.nan
 
         # >> plot the sigma-clipped time-series data
-        if plot:
-            suffix='_niter'+str(n_iter)+'_dtrn'
-            pt.plot_lc(time[num_indx], flux_dtrn, lcfile, title=title,
-                       prefix=prefix, suffix=suffix, mdumpcsv=mg.mdumpcsv,
-                       output_dir=savepath)
+        # if plot:
+        #     suffix='_niter'+str(n_iter)+'_dtrn'
+        #     pt.plot_lc(time[num_indx], flux_dtrn, lcfile, title=title,
+        #                prefix=prefix, suffix=suffix, mdumpcsv=mg.mdumpcsv,
+        #                output_dir=savepath)
 
-            suffix='_niter'+str(n_iter)
-            pt.plot_lc(time, flux_clip, lcfile, prefix=prefix, title=title,
-                       mdumpcsv=mg.mdumpcsv, suffix=suffix, output_dir=savepath)
+        #     suffix='_niter'+str(n_iter)
+        #     pt.plot_lc(time, flux_clip, lcfile, prefix=prefix, title=title,
+        #                mdumpcsv=mg.mdumpcsv, suffix=suffix, output_dir=savepath)
 
         # >> break loop if no data points are clipped
         n_clip = clip_indx.size
@@ -161,13 +165,17 @@ def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
     num_clip = np.count_nonzero(np.isnan(flux_clip)) - \
                np.count_nonzero(np.isnan(flux))
     print('Total NUM_CLIP: '+str(num_clip))
-    table_meta = [('NUM_CLIP', num_clip)]
-    ticid = meta['TICID']
+    
+    ticid = lcfile.split('/')[-1]
+    np.save(mg.datapath+'clip/'+sector+'/'+ticid, np.array([time, flux_clip]))
 
-    # >> save light curve in Fits file
-    dt.write_fits(mg.datapath+'clip/'+sector+'/',
-                  meta, [time, flux_clip],
-                  ['TIME', 'FLUX'], table_meta=table_meta)
+    # table_meta = [('NUM_CLIP', num_clip)]
+    # ticid = meta['TICID']
+
+    # # >> save light curve in Fits file
+    # dt.write_fits(mg.datapath+'clip/'+sector+'/',
+    #               meta, [time, flux_clip],
+    #               ['TIME', 'FLUX'], table_meta=table_meta)
 
 def sigma_clip_diag(mg, bins=40, cols=['Tmag', 'Teff'], n_div=6, ncols=2,
                     load_txt=True):
@@ -337,14 +345,20 @@ def get_lc(lcpath, ticid, timescale, norm=False, method='median', rmv_nan=False,
 
     t, y = [], []
     for fname in fnames:
-        data, meta = dt.open_fits(fname=fname)  
+        # data, meta = dt.open_fits(fname=fname)  
+        data = np.load(fname)
         if rmv_nan:
-            inds = np.nonzero(~np.isnan(data['FLUX']))
-            t.append(data['TIME'][inds])
-            y.append(data['FLUX'][inds])
+            # inds = np.nonzero(~np.isnan(data['FLUX']))
+            # t.append(data['TIME'][inds])
+            # y.append(data['FLUX'][inds])
+            inds = np.nonzero(~np.isnan(data[1]))
+            t.append(data[0][inds])
+            y.append(data[1][inds])
         else:
-            t.append(data['TIME'])
-            y.append(data['FLUX'])
+            # t.append(data['TIME'])
+            # y.append(data['FLUX'])
+            t.append(data[0][inds])
+            y.append(data[1][inds])
     if plot:
         fig, ax = plt.subplots(figsize=(8, 3))
         plot_lc(ax, np.concatenate(t), np.concatenate(y), c='k', ms=2,
@@ -441,15 +455,17 @@ def make_lspm_freq(fnames, savepath, timescale=1, n_check=500, n0=6):
 
         # >> load time array
         if timescale == 1:
-            data, meta = dt.open_fits(fname=lcfile)
-            time = data['TIME']
+            time = np.load(lcfile)[0]
+            # data, meta = dt.open_fits(fname=lcfile)
+            # time = data['TIME']
         else: # >> multiple sectors
             ticid = lcfile.split('/')[-1].split('.')[0]
             f_ticid = [f for f in fnames if str(ticid) in f][:timescale]
             time = []
             for f in f_ticid: 
-                data, meta = dt.open_fits(fname=f)
-                time.append(data['TIME'])
+                # data, meta = dt.open_fits(fname=f)
+                # time.append(data['TIME'])
+                time.append(np.load(f)[0])
             time = np.concatenate(time)
 
         inds = np.nonzero(~np.isnan(time))
@@ -473,70 +489,9 @@ def make_lspm_freq(fnames, savepath, timescale=1, n_check=500, n0=6):
 
     return freq
 
-# def calc_lspm_avg_sector(mg, plot=True, plot_int=200, sectors=[],
-#                             n0=6, overwrite=True, report_time=True):
-#     """Compute LS-periodograms with a baseline of a single observational sector 
-#     (~27 days). Periodograms for stars that are observed in multiple sectors are
-#     averaged for each frequency bin.
-#     * mg : Mergen object
-#     * n0 : oversampling factor
-#     """
-
-#     # >> get light curve filenames
-#     sectors, ticid, fnames = load_lc_fnames(mg, sectors)
-
-#     # >> set up output directories
-#     savepath, lspmpath = make_lspm_dirs(mg, timescale)
-
-#     # >> determine suitable frequency grid
-#     min_freq, max_freq, df = make_lspm_freq(fnames, savepath)
-
-#     # -- find TICIDs observed in multiple sectors ------------------------------
-#     uniq_ticid, counts = np.unique(ticid, return_counts=True)
-#     mult_obs = uniq_ticid[np.nonzero(counts>1)]    
-
-#     # -- compute LS periodograms -----------------------------------------------
-#     for i in range(len(fnames)):
-
-#         if report_time and i % plot_int == 0:
-#             from datetime import datetime
-#             start = datetime.now()
-
-#         lcfile = fnames[i]
-
-#         ticid_lc = int(lcfile.split('/')[-1][:-5])
-#         # lcfiles = [lcfile]
-#         # if ticid_lc in mult_obs:
-#         #     lcfiles = [f for f in fnames if str(ticid_lc) in f]
-
-#         if i % plot_int == 0:
-#             print('Computing LS periodogram of light curve '+str(i)+'/'+\
-#                   str(len(fnames)))
-#             if plot: plot_pgram = True
-#             verbose = True
-#             gc.collect()
-#         else:
-#             plot_pgram = False
-#             verbose = False
-
-#         if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits'):
-#             pass
-#         else:
-#             calc_ls_pgram(mg, ticid_lc, plot=plot_pgram, verbose=verbose,
-#                           min_freq=min_freq, max_freq=max_freq, df=df, 
-#                           timescale=1, savepath=savepath, lspmpath=lspmpath)
-
-
-#         if report_time and i % plot_int == 0:
-#             end = datetime.now()
-#             dur_sec = (end-start).total_seconds()
-#             print('Time to produce LS-periodogram: '+str(dur_sec))
-
-
-
 def calc_lspm_mult_sector(mg, plot=True, plot_int=200, sectors=[], n0=6,
-                          timescale=6, overwrite=False, report_time=True,
-                          avg=False):
+                          timescale=6, overwrite=False, report_time=False,
+                          avg=False, use_gpu=False):
     """Compute LS-periodograms with baselines determined by the timescale arg
     (in units of number of sectors, ~27 days each).
     * mg : Mergen object
@@ -546,11 +501,17 @@ def calc_lspm_mult_sector(mg, plot=True, plot_int=200, sectors=[], n0=6,
             sectors
     """
 
+
     # >> get light curve filenames
     ticid, fnames = load_lc_fnames(mg, sectors)
 
     # >> set up output directories
     savepath, lspmpath = make_lspm_dirs(mg, timescale)
+    if len(sectors) == 0:
+        sectors = os.listdir(mg.datapath+'mask/')
+        sectors.sort()
+    for s in sectors:
+        dt.create_dir(lspmpath+s)
 
     # >> determine suitable frequency grid
     freq = make_lspm_freq(fnames, savepath, timescale, n0=n0)
@@ -563,39 +524,47 @@ def calc_lspm_mult_sector(mg, plot=True, plot_int=200, sectors=[], n0=6,
     print('Number of TICIDs: '+str(len(ticid)))
 
     # -- compute LS periodograms -----------------------------------------------
-    for i in range(len(ticid)):
-
-        if report_time and i % plot_int == 0:
+    if use_gpu:
+        if report_time:
             from datetime import datetime
             start = datetime.now()
-            print('Computing LS periodogram of light curve '+str(i)+'/'+\
-                  str(len(ticid)))
-            if plot: plot_pgram = True
-            verbose = True
-        else: 
-            plot_pgram = False
-            verbose = False
 
-        ticid_lc = int(ticid[i])
+    else:
+        for i in range(len(ticid)):
 
-        # >> calculate LS periodogram
-        if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits') \
-           and not plot_pgram:
-            pass
-        else:
-            calc_lspm(mg, ticid_lc, plot=plot_pgram, timescale=timescale,
-                      freq=freq, avg=avg,
-                      savepath=savepath, lspmpath=lspmpath, verbose=verbose)
+            if report_time and i % plot_int == 0:
+                from datetime import datetime
+                start = datetime.now()
+                print('Computing LS periodogram of light curve '+str(i)+'/'+\
+                      str(len(ticid)))
+                if plot: plot_pgram = True
+                verbose = True
+            else: 
+                plot_pgram = False
+                verbose = False
 
-        if report_time and i % plot_int == 0:
-            end = datetime.now()
-            dur_sec = (end-start).total_seconds()
-            print('Time to produce LS-periodogram: '+str(dur_sec))
+            ticid_lc = int(ticid[i])
+
+            # >> calculate LS periodogram
+            if overwrite and os.path.exists(lspmpath+str(ticid_lc)+'.fits') \
+               and not plot_pgram:
+                pass
+            else:
+                calc_lspm(mg, ticid_lc, plot=plot_pgram, timescale=timescale,
+                          freq=freq, avg=avg,
+                          savepath=savepath, lspmpath=lspmpath, verbose=verbose,
+                          report_time=report_time)
+
+            if report_time and i % plot_int == 0:
+                end = datetime.now()
+                dur_sec = (end-start).total_seconds()
+                print('Time to produce LS-periodogram: '+str(dur_sec))
 
 def calc_lspm(mg, ticid, plot=False, meta=None, freq=None,
               max_freq=1/(8/1440.), min_freq=1/12.7,
               df=1/(4*27.), savepath=None, lspmpath=None,
-              verbose=True, timescale=1, avg=True):
+              verbose=True, timescale=1, avg=True,
+              report_time=False):
     '''
     * min_freq : default it 8 minutes (~> average Nyquist frequency)
     * max_freq : default is 27 days (~ average baseline)
@@ -603,12 +572,22 @@ def calc_lspm(mg, ticid, plot=False, meta=None, freq=None,
     '''
     from astropy.timeseries import LombScargle
 
+    if report_time:
+        from datetime import datetime
+        start = datetime.now()
+
     # >> open light curve files
     time, flux, sectors = get_lc(mg.datapath+'clip/', ticid, timescale, rmv_nan=True,
                         detrend=True, plot=plot, savepath=savepath,
                         return_sector=True, norm=True, method='standardize')
 
+    if report_time:
+        end = datetime.now()
+        dur_sec = (end-start).total_seconds()
+        print('Time to load light curve: '+str(dur_sec))
+
     time, flux = np.array(time), np.array(flux)
+
 
     if type(freq) == type(None):
         freq = np.arange(min_freq, max_freq, df)
@@ -621,7 +600,7 @@ def calc_lspm(mg, ticid, plot=False, meta=None, freq=None,
             lspm = LombScargle(time[i][num_inds], flux[i][num_inds]).power(freq)
             lspm_sector.append(lspm)
             if not avg:
-                np.save(lspmpath+str(ticid)+'-s%02d'%sectors[i]+'.npy', lspm)
+                np.save(lspmpath+'sector-%02d/'%sectors[i]+str(ticid)+'.npy', lspm)
         if avg:
             lspm = np.median(lspm_sector, axis=0)
             np.save(lspmpath+str(ticid)+'.npy', lspm)
@@ -630,6 +609,11 @@ def calc_lspm(mg, ticid, plot=False, meta=None, freq=None,
         lspm = LombScargle(time[num_inds],
                            flux[num_inds]).power(freq)
         np.save(lspmpath+str(ticid)+'.npy', lspm)
+
+    if report_time:
+        end = datetime.now()
+        dur_sec = (end-start).total_seconds()
+        print('Time to compute LS-periodograms: '+str(dur_sec))
 
     gc.collect()
 
