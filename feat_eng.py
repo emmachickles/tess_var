@@ -731,8 +731,19 @@ def preprocess_lspm(mg, n_chunk=10, plot_int=1000,
     datapath = mg.datapath+'timescale-'+str(timescale)+'sector/ae/'
     dt.create_dir(datapath)
 
-    fnames = [lspmpath+f for f in os.listdir(lspmpath)]
-    ticid = [f[:-5] for f in os.listdir(lspmpath)]
+    sectors = os.listdir(lspmpath)
+    sectors.sort()
+    sectors.pop(sectors.index('freq.npy'))
+    freq = np.load(lspmpath+'freq.npy')
+    fnames = []
+    for sector in sectors:
+        fnames.extend([lspmpath+sector+'/'+f for f in\
+                       os.listdir(lspmpath+sector+'/')])
+    fnames.sort()
+    ticid = [f.split('/')[-1][:-4] for f in fnames]
+
+    # fnames = [lspmpath+f for f in os.listdir(lspmpath)]
+    # ticid = [f[:-5] for f in os.listdir(lspmpath)]
 
     savepath = mg.savepath+'timescale-'+str(timescale)+'sector/normalize/'
     dt.create_dir(savepath)
@@ -741,17 +752,23 @@ def preprocess_lspm(mg, n_chunk=10, plot_int=1000,
     for n in range(n_chunk): 
         if n == n_chunk-1:
             fnames_chunk = fnames[n*(len(fnames)//n_chunk):]
+            ticid_chunk = ticid[n*(len(fnames)//n_chunk):]
         else:
             fnames_chunk = fnames[n*(len(fnames)//n_chunk):\
                                   (n+1)*(len(fnames)//n_chunk)]
-        lspm, sector, ticid = [], [], []
+            ticid_chunk = ticid[n*(len(fnames)//n_chunk):\
+                                  (n+1)*(len(fnames)//n_chunk)]
+        sector_chunk = [int(f.split('/')[-2].split('-')[1]) for f in fnames_chunk]
+
+        lspm = []
         for i in range(len(fnames_chunk)):
-            with fits.open(fnames_chunk[i], memmap=False) as hdul:
-                freq = hdul[1].data['FREQ']
-                lspm.append(hdul[1].data['LSPM'].astype(np.float32))
-                # sector.append(hdul[0].header['SECTOR'])
-                tic = int(fnames_chunk[i].split('/')[-1].split('.')[0])
-                ticid.append(tic)
+            lspm.append(np.load(fnames_chunk[i]))
+            # with fits.open(fnames_chunk[i], memmap=False) as hdul:
+            #     freq = hdul[1].data['FREQ']
+            #     lspm.append(hdul[1].data['LSPM'].astype(np.float32))
+            #     # sector.append(hdul[0].header['SECTOR'])
+            #     tic = int(fnames_chunk[i].split('/')[-1].split('.')[0])
+            #     ticid.append(tic)
 
             if i % plot_int == 0:
                 print('Chunk '+str(n)+' / '+str(n_chunk-1)+': '+\
@@ -761,24 +778,28 @@ def preprocess_lspm(mg, n_chunk=10, plot_int=1000,
 
                 fig, ax = plt.subplots(2)
                 ax[0].set_title('Unnormalized LS periodogram for TIC '+\
-                                str(tic))
-                plot_lspm(ax[0], freq, hdul[1].data['LSPM'])
+                                str(ticid_chunk[i]))
+                # plot_lspm(ax[0], freq, hdul[1].data['LSPM'])
+                plot_lspm(ax[0], freq, lspm[i])
 
                 ax[1].set_title('Normalized LS periodogram for TIC '+\
-                                str(tic))
+                                str(ticid_chunk[i]))
                 # plot_lspm(ax[1], freq,  dt.standardize([hdul[1].data['LSPM']])[0])
-                plot_lspm(ax[1], freq,  dt.normalize_minmax([hdul[1].data['LSPM']],
-                                                            new_min=-1.)[0])
+                # plot_lspm(ax[1], freq,  dt.normalize_minmax([hdul[1].data['LSPM']],
+                #                                             new_min=-1.)[0])
+                plot_lspm(ax[1], freq,  dt.normalize_minmax(lspm[i],
+                                                            new_min=-1., ax=0))
+
                 fig.tight_layout()
-                fig.savefig(savepath+'TIC'+str(tic)+'.png')
-                print(savepath+'TIC'+str(tic)+'.png')
+                fig.savefig(savepath+'TIC'+str(ticid_chunk[i])+'.png')
+                print(savepath+'TIC'+str(ticid_chunk[i])+'.png')
                 plt.close(fig)
 
         # >> convert lists to numpy arrays
         trunc = np.min([len(l) for l in lspm]) # !! hard code
         lspm = [l[:trunc] for l in lspm] # !! hard code
         lspm  = np.array(np.stack(lspm))
-        sector, ticid = np.array(sector), np.array(ticid)
+        ticid_chunk = np.array(ticid_chunk)
 
         # >> standardize # >> drives most values negative
         # lspm = dt.standardize(lspm, ax=1)
@@ -788,8 +809,8 @@ def preprocess_lspm(mg, n_chunk=10, plot_int=1000,
 
         # >> save
         np.save(datapath+'chunk%02d'%n+'_train_lspm.npy', lspm)
-        np.save(datapath+'chunk%02d'%n+'_train_sector.npy', sector)
-        np.save(datapath+'chunk%02d'%n+'_train_ticid.npy', ticid)
+        np.save(datapath+'chunk%02d'%n+'_train_sector.npy', sector_chunk)
+        np.save(datapath+'chunk%02d'%n+'_train_ticid.npy', ticid_chunk)
         np.save(datapath+'chunk%02d'%n+'_train_freq.npy', freq)
 
 def load_lspm_fnames(mg, timescale=1):

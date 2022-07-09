@@ -57,14 +57,15 @@ mg = mergen(setup=setup)
 if prep_spoc:
     # mg.clean_data() # >> quality mask
     # fe.sigma_clip_data(mg) # >> sigma clip
+    # fe.calc_lspm_mult_sector(mg, sectors=sectors, timescale=1)
+    fe.preprocess_lspm(mg, timescale=1)
+    pdb.set_trace()
 
     # >> short timescale (1 month)
     # fe.calc_lspgram_avg_sector(mg, sectors=sectors, overwrite=True) 
     # fe.preprocess_lspgram(mg, timescale=1)
     # fe.calc_stats(datapath, timescale=1, savepath=savepath)
 
-    fe.calc_lspm_mult_sector(mg, sectors=sectors, timescale=1)
-    pdb.set_trace()
 
     # fe.test_simulated_data(savepath, datapath, timescale=1)
 
