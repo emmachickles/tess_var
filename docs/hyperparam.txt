@@ -1,13 +1,13 @@
 Param: Value
 kernel_size: 5
-latent_dim: 35
+latent_dim: 30
 strides: 1
 epochs: 15
 dropout: 0.2
-num_filters: 32
+num_filters: 16
 num_filters_incr: False
-num_conv_layers: 10
-batch_size: 16
+num_conv_layers: 4
+batch_size: 64
 batch_norm: True
 activation: elu
 optimizer: adam
@@ -27,7 +27,7 @@ encoder_decoder_skip: False
 encoder_skip: False
 decoder_skip: False
 full_feed_forward_highway: False
-cvae: True
+cvae: False
 share_pool_inds: False
 max_dim: 1000
 step: 250

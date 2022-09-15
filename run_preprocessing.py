@@ -17,11 +17,6 @@ $ python tess_stellar_var/run_preprocessing.py
 from __init__ import *
 import feat_eng as fe
 
-# >> what to run?
-prep_spoc    = True  # >> preprocesses all short-cadence SPOC data
-target_prep  = False # >> preprocess a single target
-diag_only    = False # >> produce diagnostic plots
-
 # >> inputs
 n_sigma      = 7
 plot         = True
@@ -50,54 +45,36 @@ print(sectors)
 
 # ------------------------------------------------------------------------------
 
+start = datetime.now()
+fe.prep_batch(datapath='/scratch/submit/tess/data/',
+              savepath='/data/submit/echickle/data/timescale-1sector/')
+end = datetime.now()
+dur_sec = (end-start).total_seconds()
+print(dur_sec)
+pdb.set_trace()
+
 # >> Initialize Mergen object
 mg = mergen(setup=setup)
 
 # >> Perform preprocessing for all SPOC data 
-if prep_spoc:
-    # mg.clean_data() # >> quality mask
-    # fe.sigma_clip_data(mg) # >> sigma clip
-    # fe.calc_lspm_mult_sector(mg, sectors=sectors, timescale=1)
-    fe.preprocess_lspm(mg, timescale=1)
-    pdb.set_trace()
+# mg.clean_data() # >> quality mask
+# fe.sigma_clip_data(mg) # >> sigma clip
+# fe.calc_lspm_mult_sector(mg, sectors=sectors, timescale=1)
+# fe.preprocess_lspm(mg, timescale=1)
+pdb.set_trace()
 
-    # >> short timescale (1 month)
-    # fe.calc_lspgram_avg_sector(mg, sectors=sectors, overwrite=True) 
-    # fe.preprocess_lspgram(mg, timescale=1)
-    # fe.calc_stats(datapath, timescale=1, savepath=savepath)
+# >> short timescale (1 month)
+# fe.calc_lspgram_avg_sector(mg, sectors=sectors, overwrite=True) 
+# fe.preprocess_lspgram(mg, timescale=1)
+# fe.calc_stats(datapath, timescale=1, savepath=savepath)
 
+# fe.test_simulated_data(savepath, datapath, timescale=1)
 
-    # fe.test_simulated_data(savepath, datapath, timescale=1)
+# >> medium timescale (6 months, 19366 targets in S1-26 2-min)
+fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=6)
+fe.preprocess_lspgram(mg, timescale=6, n_chunk=2)
 
-    # >> medium timescale (6 months, 19366 targets in S1-26 2-min)
-    fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=6)
-    fe.preprocess_lspgram(mg, timescale=6, n_chunk=2)
-
-    # >> long timescale (12 months, 3000 targets in S1-26 2-min)
-    fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=13,
-                                   plot_int=50)
-    fe.preprocess_lspgram(mg, timescale=13, n_chunk=2)
-
-# >> Alternatively perform quality and sigma-clip masking for a single target
-if target_prep:
-    for target in targets:
-        # savepath = '/scratch/echickle/tmp/'
-        # lcfile = mg.datapath+'mask/sectors-01/'+str(target)+'.fits'
-        # fe.sigma_clip_lc(mg, lcfile, plot=plot, n_sigma=n_sigma,
-        #                  savepath=savepath)
-
-        # data,meta=dt.open_fits(fname=lcfile)
-        # t, y = data['TIME'], data['FLUX']
-        # fe.calc_ls_pgram(mg, lcfile, plot=True, savepath=savepath)
-        # feat=fe.calc_phase_curve(t,y,plot=plot,output_dir='/home/echickle/tmp/',
-        #                          prefix='TIC'+str(target)+'-')
-        
-        fe.calc_ls_pgram(mg, target, plot=True,
-                      savepath='/scratch/echickle/tmp/detrend/',
-                      lspmpath='/scratch/echickle/tmp/', timescale=1)
-
-# >> Create some diagnostic plots for masking
-if diag_only:
-    fe.sigma_clip_diag(mg)
-
-
+# >> long timescale (12 months, 3000 targets in S1-26 2-min)
+fe.calc_lspgram_mult_sector(mg, sectors=sectors, timescale=13,
+                               plot_int=50)
+fe.preprocess_lspgram(mg, timescale=13, n_chunk=2)

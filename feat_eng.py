@@ -40,6 +40,89 @@ from scipy.stats import sigmaclip
 # ==============================================================================
 # ==============================================================================
 
+def prep_batch(datapath, savepath, sector_list=None, n0=6):
+    import fnmatch as fn
+    import cuvarbase.lombscargle as gls
+    from astropy.io import fits
+    
+    if not sector_list:
+        sector_list = fn.filter(os.listdir(datapath), 'tesscurl_sector_*')
+        sector_list = [int(f.split('_')[2]) for f in sector_list]
+        sector_list = np.sort(np.unique(sector_list))
+
+    # >> get frequency grid
+    freq_fname = savepath+'freq.npy'
+    if os.path.exists(freq_fname):
+        freq = np.load(freq_fname)
+    else:
+        all_fnames = []
+        for s in sector_list:
+            s_dir = datapath+'tesscurl_sector_{}_lc/'.format(s)
+            fnames = [s_dir + f for f in os.listdir(s_dir)]
+            fnames = fn.filter(fnames, '*.fits')
+            all_fnames.extend(fnames)
+        freq = make_lspm_freq(all_fnames, savepath, n0=n0, minint=True)
+        np.save(freq_fname, freq)    
+
+    for s in sector_list:
+
+        print('Processing sector {}'.format(s))
+        
+        s_dir = datapath+'tesscurl_sector_{}_lc/'.format(s)
+        fnames = os.listdir(s_dir)
+        fnames = fn.filter(fnames, '*.fits')
+
+        data = []
+        
+        # tmp
+        # fnames = ['tess2018206045859-s0001-0000000206544316-0120-s_lc.fits']
+        
+        for i in range(len(fnames)):
+            if i % 100 == 0:
+                print('Light curve {}'.format(i))
+
+            # >> load light curve
+            lchdu = fits.open(s_dir+fnames[i])
+            time = lchdu[1].data['TIME'] # >> BJD - 2457000
+            flux = lchdu[1].data['PDCSAP_FLUX'] # >> e-/s
+            flux_err = lchdu[1].data['PDCSAP_FLUX_ERR'] # >> ei/s
+            
+            # >> quality mask
+            flux[np.nonzero(lchdu[1].data['QUALITY'])] = np.nan
+            lchdu.close()
+
+            # >> sigma clip
+            flux = sigma_clip_lc(time=time, flux=flux, flux_err=flux_err,
+                                 typebdtr='medi')
+            num_inds = np.nonzero(~np.isnan(flux))
+            time, flux = time[num_inds], flux[num_inds]
+            flux_err = flux_err[num_inds]
+
+            data.append((time, flux, flux_err))
+
+            del time, flux, flux_err
+            
+        #     s_time.append(time)
+        #     s_flux.append(flux)
+        #     s_err.append(flux_err)
+
+        pdb.set_trace()
+            
+        # >> compute LS-periodograms using cuvarbase
+        proc = gls.LombScargleAsyncProcess(freqs=freq)
+        results = proc.batched_run_const_nfreq(data, freqs=freq)
+        proc.finish()
+
+        # >> save LS-periodograms
+        results = np.array(results)
+        results = results[:,1]
+        np.save(savepath+'sector_%02d'%s, results)
+        
+
+    return
+    
+    
+
 # -- Sigma clipping ------------------------------------------------------------
 def sigma_clip_data(mg, plot=True, plot_int=200, n_sigma=7,
                     timescaldtrn=1/24., sectors=[]):
@@ -85,36 +168,27 @@ def sigma_clip_data(mg, plot=True, plot_int=200, n_sigma=7,
         #     clean_sector_diag(sector_path, savepath, sector, mdumpcsv)
 
 
-def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
+def sigma_clip_lc(time=None, flux=None, flux_err=None, mg=None, lcfile=None, sector=None,
+                  n_sigma=7, plot=False, booladdddiscbdtr=True,
+                  max_iter=5, typebdtr='gpro',
                   timescaldtrn=1/24., savepath=None):
 
-    import ephesus.util as ephesus # >> exoplanet science library
+    import ephesus.ephesus.util as ephesus
+    # import ephesus.util as ephesus # >> exoplanet science library
 
-    if type(savepath) == type(None):
-        savepath = mg.savepath + 'clip/' + sector + '/'
+    # if not savepath:
+    #     savepath = mg.savepath + 'clip/' + sector + '/'
 
     # >> load light curve
-    data = np.load(lcfile)
-    time, flux = data[0], data[1]
-    # data, meta = dt.open_fits(fname=lcfile)
-    # time = data['TIME']
-    # flux = data['FLUX']
+    if lcfile:
+        data = np.load(lcfile)
+        time, flux = data[0], data[1]
+        ticid = lcfile.split('/')[-1]        
 
     # >> initialize variables 
     n_clip = 1 # >> number of data points clipped in an iteration
     n_iter = 0 # >> number of iterations
     flux_clip = np.copy(flux) # >> initialize sigma-clipped flux
-
-    # if plot:
-    #     # title='n_sigma: {}, timescaldtrn: {:.2f} hr'.format(n_sigma,
-    #     #                                                     timescaldtrn*24)
-    #     title='n_sigma: '+str(n_sigma)+' timescaldtrn: '+\
-    #         str(np.round(timescaldtrn*24, 3))+'hr'
-    #     prefix='sigmaclip_'
-    #     ticid = int(lcfile.split('/')[-1].split('.')[0])
-    #     sector = int(lcfile.split('/')[-2].split('-')[1])
-    #     pt.plot_lc(ticid, sector, prefix=prefix, title=title,
-    #                suffix='_niter0', mdumpcsv=mg.mdumpcsv, output_dir=savepath)
 
     while n_clip > 0:
 
@@ -126,9 +200,16 @@ def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
 
         # >> trial detrending
         # flux_dtrn = detrend(flux_num)
+        if len(flux_num) == 0:
+            print(n_iter)
+            print(time.shape)
+            print(flux.shape)
+            
+        
         flux_dtrn, _, _, _, _ = \
-            ephesus.bdtr_tser(time[num_indx], flux_num,
-                              timescalbdtrspln=timescaldtrn)
+            ephesus.bdtr_tser(time[num_indx], flux_num, flux_err[num_indx],
+                              timescalbdtrspln=timescaldtrn, typebdtr=typebdtr,
+                              booladdddiscbdtr=booladdddiscbdtr)
         flux_dtrn = np.concatenate(flux_dtrn)
 
         # >> sigma-clip light curve
@@ -165,9 +246,13 @@ def sigma_clip_lc(mg, lcfile, sector='', n_sigma=10, plot=False, max_iter=5,
     num_clip = np.count_nonzero(np.isnan(flux_clip)) - \
                np.count_nonzero(np.isnan(flux))
     print('Total NUM_CLIP: '+str(num_clip))
-    
-    ticid = lcfile.split('/')[-1]
-    np.save(mg.datapath+'clip/'+sector+'/'+ticid, np.array([time, flux_clip]))
+
+
+    if mg:
+        np.save(mg.datapath+'clip/'+sector+'/'+ticid, np.array([time, flux_clip]))
+
+    else:
+        return flux_clip
 
     # table_meta = [('NUM_CLIP', num_clip)]
     # ticid = meta['TICID']
@@ -443,7 +528,8 @@ def make_lspm_dirs(mg, timescale=1):
     dt.create_dir(lspmpath)
     return savepath, lspmpath
 
-def make_lspm_freq(fnames, savepath, timescale=1, n_check=500, n0=6):
+def make_lspm_freq(fnames, savepath, timescale=1, n_check=500, n0=6,
+                   minint=True):
     '''Determine a suitable frequency grid.'''
 
     f0_avg = [] # >> average sampling rates
@@ -453,9 +539,15 @@ def make_lspm_freq(fnames, savepath, timescale=1, n_check=500, n0=6):
 
     for lcfile in fnames[::n_div]:
 
+        ext = lcfile.split('.')[-1]
+        
         # >> load time array
         if timescale == 1:
-            time = np.load(lcfile)[0]
+            if ext == 'npy':
+                time = np.load(lcfile)[0]
+            elif ext == 'fits':
+                from astropy.io import fits
+                time = fits.open(lcfile)[1].data['TIME']
             # data, meta = dt.open_fits(fname=lcfile)
             # time = data['TIME']
         else: # >> multiple sectors
@@ -480,6 +572,10 @@ def make_lspm_freq(fnames, savepath, timescale=1, n_check=500, n0=6):
     min_freq = 2/T_avg
     max_freq = f_ny/2
     df = 1/(n0*T_avg)
+
+    if minint:
+        min_freq = int(min_freq/df)*df
+        
     with open(savepath+'frequency_grid.txt', 'w') as f:
         f.write('min_freq,'+str(min_freq)+'\n')
         f.write('max_freq,'+str(max_freq)+'\n')
