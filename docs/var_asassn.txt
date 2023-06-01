@@ -1,2 +1,0 @@
-### This file contains mapping from ASAS-SN variability types to GCVS variability types ###
-HADS,DSCT
