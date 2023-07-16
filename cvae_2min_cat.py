@@ -1,6 +1,7 @@
 import os
 import pdb
 import numpy as np
+import pandas as pd
 import tensorflow as tf
 from tensorflow.keras.layers import Input, Conv1D, Flatten, Dense, Lambda, Reshape, Conv1DTranspose, MaxPooling1D, UpSampling1D
 from tensorflow.keras.models import Model
@@ -27,41 +28,58 @@ np.random.seed(42)
 tf.random.set_seed(42)
 
 # Directory containg preprocessed light curve data
-# data_dir = '/scratch/echickle/cvae_data/'
-# sector_list = list(range(1,27))
-data_dir = '/scratch/data/tess/lcur/ffi/cvae_data/'
-sector_list = [56]
+data_dir = '/scratch/echickle/cvae_data/'
+sector_list = list(range(1,27))
+# data_dir = '/scratch/data/tess/lcur/ffi/cvae_data/'
+# sector_list = [56]
 
 # Directory to save all outputs to
 mydir = '/scratch/echickle/cvae/'
 os.makedirs(mydir, exist_ok=True)
 
 # Hyperparameters
-latent_dim = 10  # Size of the latent space
-num_conv_layers = 3  # Number of convolutional layers in the encoder and decoder
+latent_dim = 4  # Size of the latent space
+num_conv_layers = 5  # Number of convolutional layers in the encoder and decoder
 num_filters = 32  # Number of filters in each convolutional layer
 kernel_size = 3  # Kernel size for the convolutional layers
 batch_size = 32
 
-# Load data
-file_list = os.listdir(data_dir)
-padded_flux_data = []
-ticid = []
-for sector in sector_list:
-    padded_flux_data.extend(np.load(data_dir+'sector-%02d_data.npy'%sector))
-    ticid.extend(np.load(data_dir+'sector-%02d_ticid.npy'%sector))
-padded_flux_data = np.array(padded_flux_data) # Approx 34 GB
-
 # Determine the desired length based on the model architecture
-max_time_length = padded_flux_data.shape[1]
-dense_length = max_time_length // (4 ** num_conv_layers) # >> length before Dense(latent_dim)
-desired_length = dense_length * (4 ** num_conv_layers)
+array_length = 128
+# dense_length = array_length // (4 ** num_conv_layers) # >> length before Dense(latent_dim)
+# desired_length = dense_length * (4 ** num_conv_layers)
+dense_length = array_length // (2 ** num_conv_layers)
+desired_length = dense_length * (2 ** num_conv_layers)
+if desired_length != array_length:
+    print('!! autoencoder not able to reconstruct to correct dimensions')
+    pdb.set_trace()
+
+# Load data
+# flux_data = np.random.randn(60000, 128)
+# ticid = np.arange(60000)
+flux_data = np.load('/scratch/echickle/tess_binned_s0001-s0026_phase_curves.npy')
+phases = flux_data[0][0]
+light_curves = flux_data[:,:,1]
+ticid = np.load('/scratch/echickle/tess_binned_s0001-s0026_ticid.npy')
+desired_length=128
+
+# Load the CSV file into a pandas DataFrame
+data = pd.read_csv('/scratch/echickle/hlsp_tess-svc_tess_lcf_all-s0001-s0026_tess_v1.0_cat.csv')
+inds = np.nonzero(data['power'] > 0.1)
+light_curves = light_curves[inds]
+ticid = ticid[inds]
+
+# Standardize
+mean = np.mean(light_curves, axis=1, keepdims=True)
+std = np.std(light_curves, axis=1, keepdims=True)
+light_curves = (light_curves - mean) / std 
 
 # Train-validation-test split
-X_train, X_test, ticid_train, ticid_test = train_test_split(padded_flux_data, ticid, test_size=0.2, random_state=42)
+X_train, X_test, ticid_train, ticid_test = train_test_split(light_curves, ticid, test_size=0.2, random_state=42)
 X_train, X_val, ticid_train, ticid_val = train_test_split(X_train, ticid_train, test_size=0.2, random_state=42)
 X_train, X_val, X_test = np.array(X_train), np.array(X_val), np.array(X_test)
 ticid_train, ticid_test, ticid_val = np.array(ticid_train), np.array(ticid_test), np.array(ticid_val)
+
 X_train = X_train.reshape(-1, desired_length, 1)
 X_val = X_val.reshape(-1, desired_length, 1)
 X_test = X_test.reshape(-1, desired_length, 1)
@@ -72,7 +90,7 @@ x = inputs
 for _ in range(num_conv_layers):
     x = Conv1D(filters=num_filters, kernel_size=kernel_size, activation='elu', padding='same', strides=2,
                kernel_regularizer=regularizers.l2(0.01))(x)
-    x = MaxPooling1D(pool_size=2)(x)
+   # x = MaxPooling1D(pool_size=2)(x)
 x = Flatten()(x)
 z_mean = Dense(latent_dim)(x)
 z_log_var = Dense(latent_dim)(x)
@@ -93,7 +111,7 @@ x = Dense(dense_length * num_filters)(latent_inputs)
 x = Reshape((dense_length, num_filters))(x)
 for _ in range(num_conv_layers):
     x = Conv1DTranspose(filters=num_filters, kernel_size=kernel_size, activation='elu', padding='same', strides=2,  kernel_regularizer=regularizers.l2(0.01))(x)
-    x = UpSampling1D(size=2)(x)
+    # x = UpSampling1D(size=2)(x)
 outputs = Conv1DTranspose(filters=1, kernel_size=kernel_size, activation='linear', padding='same')(x)
 
 # Connect encoder and decoder
@@ -128,7 +146,8 @@ def vae_loss(inputs, outputs):
 cvae.compile(optimizer='adam', loss=vae_loss)
 
 # Train the CVAE
-history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=10, batch_size=batch_size) 
+history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=1,
+                   batch_size=batch_size) 
 
 # Evaluate the model on the test set
 loss = cvae.evaluate(X_test, X_test)
@@ -139,8 +158,6 @@ try:
     latent_vectors = encoder.predict(X_test)[2]
 
     plot_tsne(latent_vectors, mydir)
-
-    plot_latent_images(decoder, 16, latent_dim, latent_vectors, mydir)
 
     # Obtain the reconstructed data from the CVAE model
     reconstructed_data = cvae.predict(X_test)
@@ -154,17 +171,20 @@ try:
     # Plot reconstruction loss distribution
     plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
 
+    cluster_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=15)
+    plot_cluster(latent_vectors, cluster_labels, mydir)
+    plot_anomaly(latent_vectors, mydir)
+    plot_tsne_cmap(latent_vectors, label_values, label, mydir)
+
+    movie_cluster(latent_vectors, cluster_labels, mydir)
+    movie_light_curves(light_curves, mydir)
+
+    plot_latent_images(decoder, 16, latent_dim, latent_vectors, mydir)
+
     # Plot intermediate outputs
     visualize_layer_outputs(encoder, X_test, 4, mydir)
 
-    plot_cluster(latent_vectors, mydir)
-
-    plot_anomaly(latent_vectors, mydir)
-
 except:
     pdb.set_trace()
-
-
-
 
 pdb.set_trace()

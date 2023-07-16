@@ -46,6 +46,49 @@ def plot_tsne(latent_vectors, mydir):
     plt.ylabel('t-SNE Dimension 2')
     plt.savefig(mydir+'tsne.png')
 
+
+def plot_tsne_cmap(latent_vectors, label_values, label, mydir, latent_tsne=None):
+    import matplotlib.cm as cm
+    import matplotlib as mpl
+    from sklearn.manifold import TSNE
+
+    # Set the text color to white
+    mpl.rcParams['text.color'] = 'white'
+
+    if latent_tsne is None:
+        tsne = TSNE(n_components=2, random_state=42)
+        latent_tsne = tsne.fit_transform(latent_vectors)
+
+    # Create a scatter plot
+    fig, ax = plt.subplots(facecolor='black')
+    ax.set_axis_off()
+
+    # Define a color map for the clusters
+    n_clusters = len(np.unique(label_values))
+    if n_clusters < 100:
+        cmap = cm.get_cmap('tab20', n_clusters)
+        cbar.ax.set_yticklabels(['< -1', '0', '> 1'])
+        # Scatter plot with points colored by cluster membership
+        scatter = ax.scatter(latent_tsne[:, 0], latent_tsne[:, 1],
+                             c=cluster_labels,
+                             cmap=cmap, s=2, alpha=0.8)
+    else:
+        cmap = plt.get_cmap('viridis')  # Choose any colormap you prefer
+        plt.scatter(latent_tsne[:, 0], latent_tsne[:, 1], c=label_values, cmap=cmap)
+
+    # Create a color bar legend
+    cbar = fig.colorbar(scatter)
+    cbar.ax.yaxis.set_tick_params(color='white')  # Set color bar tick labels to white
+    # cbar.ax.yaxis.label.set_color('white')
+    cbar.ax.yaxis.set_ticklabels(cbar.ax.get_yticklabels(), color='white')
+
+    # Set color bar edge color to white
+    cbar.outline.set_edgecolor('white')
+
+    plt.savefig(mydir + 'tsne_'+label+'.png', dpi=100)
+    print('Saved '+mydir + 'tsne_'+label+'.png')
+    
+
 def plot_latent_images(decoder, n, latent_dim, latent_vectors, mydir):
     """Plots n x n decoded images sampled from the latent space and saves the figure to mydir."""
     import tensorflow_probability as tfp
@@ -96,20 +139,28 @@ def plot_latent_images(decoder, n, latent_dim, latent_vectors, mydir):
     fig1.savefig(os.path.join(mydir, 'latent_tsne.png'))
     plt.close()
 
-def plot_original_vs_reconstructed(original_data, reconstructed_data, num_examples, mydir):
+def plot_original_vs_reconstructed(original_data, reconstructed_data, num_examples, mydir, cycles=3):
     plt.figure(figsize=(20, 8))
 
     reconstruction_loss = np.mean(np.square(original_data - reconstructed_data), axis=1).reshape(-1)
 
     for i in range(num_examples):
         plt.subplot(2, num_examples, i + 1)
-        plt.plot(original_data[i])
+        n_pts = len(original_data[i])
+        for j in range(cycles):
+            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                     original_data[i])
         plt.title('Original')
         plt.xticks([])
         # plt.yticks([])
 
         plt.subplot(2, num_examples, num_examples + i + 1)
-        plt.plot(reconstructed_data[i])
+        n_pts = len(reconstructed_data[i])
+        for j in range(cycles):
+            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                     reconstructed_data[i])
+        
+
         plt.title('Reconstructed\nLoss: '+str(np.round(reconstruction_loss[i], 5)))
         plt.xticks([])
         # plt.yticks([])
@@ -118,7 +169,7 @@ def plot_original_vs_reconstructed(original_data, reconstructed_data, num_exampl
     plt.savefig(os.path.join(mydir, 'original_vs_reconstructed.png'))
     plt.close()
 
-def plot_best_worst_reconstructed(original_data, reconstructed_data, num_examples, mydir):
+def plot_best_worst_reconstructed(original_data, reconstructed_data, num_examples, mydir, cycles=3):
     reconstruction_loss = np.mean(np.square(original_data - reconstructed_data), axis=1).reshape(-1)
     worst_indices = np.argsort(reconstruction_loss)[-num_examples:][::-1]
     worst_loss = np.sort(reconstruction_loss)[-num_examples:][::-1]
@@ -126,13 +177,20 @@ def plot_best_worst_reconstructed(original_data, reconstructed_data, num_example
     plt.figure(figsize=(20, 8))
     for i, idx in enumerate(worst_indices):
         plt.subplot(2, num_examples, i + 1)
-        plt.plot(original_data[idx])
+        n_pts = len(original_data[idx])
+        for j in range(cycles):
+            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                     original_data[idx])
         plt.title('Original')
         plt.xticks([])
         # plt.yticks([])
 
+
         plt.subplot(2, num_examples, num_examples + i + 1)
-        plt.plot(reconstructed_data[idx])
+        n_pts = len(reconstructed_data[idx])
+        for j in range(cycles):
+            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                     reconstructed_data[idx])
         plt.title('Reconstructed\nLoss: '+str(np.round(worst_loss[i], 5)))
         plt.xticks([])
         # plt.yticks([])
@@ -147,13 +205,19 @@ def plot_best_worst_reconstructed(original_data, reconstructed_data, num_example
     plt.figure(figsize=(20, 8))
     for i, idx in enumerate(best_indices):
         plt.subplot(2, num_examples, i + 1)
-        plt.plot(original_data[idx])
+        n_pts = len(original_data[idx])
+        for j in range(cycles):
+            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                     original_data[idx])
         plt.title('Original')
         plt.xticks([])
         # plt.yticks([])
 
         plt.subplot(2, num_examples, num_examples + i + 1)
-        plt.plot(reconstructed_data[idx])
+        n_pts = len(reconstructed_data[idx])
+        for j in range(cycles):
+            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                     reconstructed_data[idx])
         plt.title('Reconstructed\nLoss: '+str(np.round(best_loss[i], 5)))
         plt.xticks([])
         # plt.yticks([])
@@ -229,16 +293,17 @@ def cluster(latent_vectors, cluster_method='dbscan', n_clusters=35):
         n_clusters = np.max(cluster_labels) # Lables go as 0, 1, 2, ... and -1 for unclustered
     return cluster_labels
 
-def plot_cluster(latent_vectors, ltatent_tsne, cluster_labels, mydir):
+def plot_cluster(latent_vectors, cluster_labels, mydir, latent_tsne=None):
     import matplotlib.cm as cm
     import matplotlib as mpl
     from sklearn.manifold import TSNE
 
     # Set the text color to white
     mpl.rcParams['text.color'] = 'white'
-    
-    tsne = TSNE(n_components=2, random_state=42)
-    latent_tsne = tsne.fit_transform(latent_vectors)
+
+    if latent_tsne is None:
+        tsne = TSNE(n_components=2, random_state=42)
+        latent_tsne = tsne.fit_transform(latent_vectors)
 
     # Create a scatter plot
     fig, ax = plt.subplots(facecolor='black')
@@ -265,7 +330,7 @@ def plot_cluster(latent_vectors, ltatent_tsne, cluster_labels, mydir):
     plt.savefig(mydir + 'tsne_cluster.png', dpi=100)
     print('Saved '+mydir + 'tsne_cluster.png')
     
-def movie_cluster(latent_vectors, latent_tsne, cluster_labels, mydir):
+def movie_cluster(latent_vectors, cluster_labels, mydir, latent_tsne=None):
     import matplotlib.cm as cm
     import matplotlib as mpl
     from mpl_toolkits.mplot3d import Axes3D
@@ -276,8 +341,9 @@ def movie_cluster(latent_vectors, latent_tsne, cluster_labels, mydir):
     mpl.rcParams['text.color'] = 'white'    
     
     # Apply t-SNE to reduce dimensionality to 3D
-    tsne = TSNE(n_components=3)
-    latent_tsne = tsne.fit_transform(latent_vectors)
+    if latent_tsne is None:
+        tsne = TSNE(n_components=3)
+        latent_tsne = tsne.fit_transform(latent_vectors)
     
     # Create a 3D scatter plot
     fig = plt.figure()
@@ -346,9 +412,10 @@ def movie_cluster(latent_vectors, latent_tsne, cluster_labels, mydir):
     print('Saved '+mydir+filename)
     
 
-def plot_anomaly(latent_vectors, mydir, n_neighbors=20):
-
+def plot_anomaly(latent_vectors, mydir, n_neighbors=20, latent_tsne=None):
+    import matplotlib as mpl
     from sklearn.neighbors import LocalOutlierFactor
+    from sklearn.manifold import TSNE
 
     # Instantiate the LOF algorithm
     lof = LocalOutlierFactor(n_neighbors=n_neighbors)
@@ -358,20 +425,46 @@ def plot_anomaly(latent_vectors, mydir, n_neighbors=20):
 
     # Obtain the anomaly scores for each sample (negative scores indicate anomalies)
     anomaly_scores = -1*lof.negative_outlier_factor_
+    anomaly_scores = np.array(anomaly_scores)
 
     # Define a threshold for classifying samples as anomalies
-    threshold = -2.5
+    threshold = np.quantile(anomaly_scores, 0.9)
 
     # Create an array of anomaly labels based on the threshold
-    anomaly_labels = [1 if score < threshold else 0 for score in anomaly_scores]
+    anomaly_labels = np.nonzero(anomaly_scores > threshold)
 
-    # Count the number of anomalies
-    num_anomalies = sum(anomaly_labels)
+    # Set the text color to white
+    mpl.rcParams['text.color'] = 'white'
 
-    # Print the number of anomalies
-    print("Number of anomalies detected:", num_anomalies)
+    if latent_tsne is None:
+        tsne = TSNE(n_components=2, random_state=42)
+        latent_tsne = tsne.fit_transform(latent_vectors)
 
-def movie_light_curves(light_curves, errors, mydir, total_frames=100):
+    # Define color map and normalize anomaly scores
+    cmap = plt.get_cmap('viridis')  # Choose any colormap you prefer
+    normalized_scores = (anomaly_scores - np.min(anomaly_scores)) / (np.max(anomaly_scores) - np.min(anomaly_scores))
+
+    # Create a scatter plot
+    fig, ax = plt.subplots(facecolor='black')
+    ax.set_axis_off()
+
+    # Set colorbar
+    cbar = plt.colorbar()
+    cbar.set_label('Anomaly Score')
+    cbar.ax.yaxis.set_tick_params(color='white')  # Set color bar tick labels to white
+    # cbar.ax.yaxis.label.set_color('white')
+    cbar.ax.yaxis.set_ticklabels(cbar.ax.get_yticklabels(), color='white')
+
+    # Set color bar edge color to white
+    cbar.outline.set_edgecolor('white')
+
+    # Scatter plot with points colored by cluster membership
+    plt.scatter(latent_tsne[:, 0], latent_tsne[:, 1], c=normalized_scores, s=100 * normalized_scores, cmap=cmap)
+    plt.savefig(mydir + 'tsne_anomaly.png', dpi=100)
+    print('Saved '+mydir + 'tsne_anomaly.png')
+
+
+def movie_light_curves(light_curves, mydir, total_frames=100, errors=None, ticid=None):
     import numpy as np
     import matplotlib.pyplot as plt
     from matplotlib.animation import FuncAnimation, FFMpegWriter
@@ -407,7 +500,8 @@ def movie_light_curves(light_curves, errors, mydir, total_frames=100):
                 if idx < light_curves.shape[0]:
                     x = np.arange(light_curves.shape[1])
                     y = light_curves[idx]
-                    y_err = errors[idx]
+                    if errors is not None:
+                        y_err = errors[idx]
     
                     # Clear the current plot
                     ax[i, j].cla()
@@ -416,7 +510,12 @@ def movie_light_curves(light_curves, errors, mydir, total_frames=100):
                     alpha = (i + 1) / max_rows
     
                     # Plot the light curve with error bars and set the alpha value
-                    ax[i, j].errorbar(x, y, yerr=y_err, fmt='-', color='black', alpha=alpha)
+                    if ticid is not None:
+                        ax[i,j].text(0, 0, 'TIC '+str(np.int64(ticid[idx])), ha='left', va='center', transform=ax[i,j].transAxes)
+                    if errors is None:
+                        ax[i,j].plot(x,y, '-', c='k', alpha=alpha)
+                    else:
+                        ax[i, j].errorbar(x, y, yerr=y_err, fmt='-', color='black', alpha=alpha)
     
                     ax[i, j].set_xlim(0, light_curves.shape[1])
                     ax[i, j].set_ylim(np.min(light_curves - errors), np.max(light_curves + errors))
@@ -520,4 +619,5 @@ def movie_cluster_insets(light_curves, errors, latent_vectors, latent_tsne, clus
     
     # Save the animation as an MP4 file
     animation.save(mydir+filename, writer='ffmpeg')
+    print('Saved '+mydir+filename)
         
