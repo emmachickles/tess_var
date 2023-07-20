@@ -47,7 +47,7 @@ def plot_tsne(latent_vectors, mydir):
     plt.savefig(mydir+'tsne.png')
 
 
-def plot_tsne_cmap(latent_vectors, label_values, label, mydir, latent_tsne=None):
+def plot_tsne_cmap(latent_vectors, label_values, label, mydir, latent_tsne=None, cluster_labels=None):
     import matplotlib.cm as cm
     import matplotlib as mpl
     from sklearn.manifold import TSNE
@@ -67,17 +67,18 @@ def plot_tsne_cmap(latent_vectors, label_values, label, mydir, latent_tsne=None)
     n_clusters = len(np.unique(label_values))
     if n_clusters < 100:
         cmap = cm.get_cmap('tab20', n_clusters)
-        cbar.ax.set_yticklabels(['< -1', '0', '> 1'])
         # Scatter plot with points colored by cluster membership
         scatter = ax.scatter(latent_tsne[:, 0], latent_tsne[:, 1],
-                             c=cluster_labels,
+                             c=label_values,
                              cmap=cmap, s=2, alpha=0.8)
     else:
         cmap = plt.get_cmap('viridis')  # Choose any colormap you prefer
-        plt.scatter(latent_tsne[:, 0], latent_tsne[:, 1], c=label_values, cmap=cmap)
+        scatter = plt.scatter(latent_tsne[:, 0], latent_tsne[:, 1], c=label_values, cmap=cmap)
 
     # Create a color bar legend
     cbar = fig.colorbar(scatter)
+    if cluster_labels is not None:
+        cbar.ax.set_yticklabels(cluster_labels)
     cbar.ax.yaxis.set_tick_params(color='white')  # Set color bar tick labels to white
     # cbar.ax.yaxis.label.set_color('white')
     cbar.ax.yaxis.set_ticklabels(cbar.ax.get_yticklabels(), color='white')
@@ -448,9 +449,12 @@ def plot_anomaly(latent_vectors, mydir, n_neighbors=20, latent_tsne=None):
     fig, ax = plt.subplots(facecolor='black')
     ax.set_axis_off()
 
+    # Scatter plot with points colored by cluster membership
+    scatter = plt.scatter(latent_tsne[:, 0], latent_tsne[:, 1], c=normalized_scores, s=100 * normalized_scores, cmap=cmap)
+
     # Set colorbar
-    cbar = plt.colorbar()
-    cbar.set_label('Anomaly Score')
+    cbar = fig.colorbar(scatter)
+    cbar.set_label('Anomaly Score', rotation=270, c='white')
     cbar.ax.yaxis.set_tick_params(color='white')  # Set color bar tick labels to white
     # cbar.ax.yaxis.label.set_color('white')
     cbar.ax.yaxis.set_ticklabels(cbar.ax.get_yticklabels(), color='white')
@@ -458,8 +462,7 @@ def plot_anomaly(latent_vectors, mydir, n_neighbors=20, latent_tsne=None):
     # Set color bar edge color to white
     cbar.outline.set_edgecolor('white')
 
-    # Scatter plot with points colored by cluster membership
-    plt.scatter(latent_tsne[:, 0], latent_tsne[:, 1], c=normalized_scores, s=100 * normalized_scores, cmap=cmap)
+    plt.tight_layout()
     plt.savefig(mydir + 'tsne_anomaly.png', dpi=100)
     print('Saved '+mydir + 'tsne_anomaly.png')
 

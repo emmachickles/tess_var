@@ -75,10 +75,16 @@ std = np.std(light_curves, axis=1, keepdims=True)
 light_curves = (light_curves - mean) / std 
 
 # Train-validation-test split
-X_train, X_test, ticid_train, ticid_test = train_test_split(light_curves, ticid, test_size=0.2, random_state=42)
-X_train, X_val, ticid_train, ticid_val = train_test_split(X_train, ticid_train, test_size=0.2, random_state=42)
+X_train, X_test, idx_train, idx_test = train_test_split(light_curves, np.arange(len(light_curves)), test_size=0.2, random_state=42)
+X_train, X_val, idx_train, idx_val = train_test_split(X_train, idx_train, test_size=0.2, random_state=42)
 X_train, X_val, X_test = np.array(X_train), np.array(X_val), np.array(X_test)
-ticid_train, ticid_test, ticid_val = np.array(ticid_train), np.array(ticid_test), np.array(ticid_val)
+idx_train, idx_val, idx_test = np.int64(np.array(idx_train)), np.int64(np.array(idx_val)), np.int64(np.array(idx_test))
+ticid_train, ticid_val, ticid_test = ticid[idx_train], ticid[idx_val], ticid[idx_test]
+
+# X_train, X_test, ticid_train, ticid_test = train_test_split(light_curves, ticid, test_size=0.2, random_state=42)
+# X_train, X_val, ticid_train, ticid_val = train_test_split(X_train, ticid_train, test_size=0.2, random_state=42)
+# X_train, X_val, X_test = np.array(X_train), np.array(X_val), np.array(X_test)
+# ticid_train, ticid_test, ticid_val = np.array(ticid_train), np.array(ticid_test), np.array(ticid_val)
 
 X_train = X_train.reshape(-1, desired_length, 1)
 X_val = X_val.reshape(-1, desired_length, 1)
@@ -171,12 +177,27 @@ try:
     # Plot reconstruction loss distribution
     plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
 
-    cluster_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=15)
+    kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=15)
     plot_cluster(latent_vectors, cluster_labels, mydir)
     plot_anomaly(latent_vectors, mydir)
-    plot_tsne_cmap(latent_vectors, label_values, label, mydir)
 
-    movie_cluster(latent_vectors, cluster_labels, mydir)
+    data_test = data.iloc[idx_test]
+    label = 'Solution'
+    cluster_labels = np.unique(data_test[label])
+    label_values = np.array([np.nonzero(cluster_labels == sol)[0][0] for sol in data_test['Solution']])
+    plot_tsne_cmap(latent_vectors, label_values, label, mydir, cluster_labels=cluster_labels)
+    
+    label = 'GAIAmag'
+    label_values = data_test[label].to_numpy()
+    inds = np.nonzero(~np.isnan(label_values))
+    plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+
+    label = 'Teff'
+    label_values = data_test[label].to_numpy()
+    inds = np.nonzero(~np.isnan(label_values))
+    plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+
+    movie_cluster(latent_vectors, kmeans_labels, mydir)    
     movie_light_curves(light_curves, mydir)
 
     plot_latent_images(decoder, 16, latent_dim, latent_vectors, mydir)
