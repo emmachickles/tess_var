@@ -152,60 +152,61 @@ def vae_loss(inputs, outputs):
 cvae.compile(optimizer='adam', loss=vae_loss)
 
 # Train the CVAE
-history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=1,
+history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=30,
                    batch_size=batch_size) 
 
 # Evaluate the model on the test set
 loss = cvae.evaluate(X_test, X_test)
 print('Test Loss:', loss)
 
-try:
-    # Encode the test set samples
-    latent_vectors = encoder.predict(X_test)[2]
+plot_loss(history, mydir)
 
-    plot_tsne(latent_vectors, mydir)
+# Encode the test set samples
+latent_vectors = encoder.predict(X_test)[2]
 
-    # Obtain the reconstructed data from the CVAE model
-    reconstructed_data = cvae.predict(X_test)
+plot_tsne(latent_vectors, mydir)
 
-    # Plot the original vs reconstructed light curves
-    plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir)
+# Obtain the reconstructed data from the CVAE model
+reconstructed_data = cvae.predict(X_test)
 
-    # Plot worst reconstructions
-    plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir)
+# Plot the original vs reconstructed light curves
+plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir)
 
-    # Plot reconstruction loss distribution
-    plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
+# Plot worst reconstructions
+plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir)
 
-    kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=15)
-    plot_cluster(latent_vectors, cluster_labels, mydir)
-    plot_anomaly(latent_vectors, mydir)
+# Plot reconstruction loss distribution
+plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
 
-    data_test = data.iloc[idx_test]
-    label = 'Solution'
-    cluster_labels = np.unique(data_test[label])
-    label_values = np.array([np.nonzero(cluster_labels == sol)[0][0] for sol in data_test['Solution']])
-    plot_tsne_cmap(latent_vectors, label_values, label, mydir, cluster_labels=cluster_labels)
-    
-    label = 'GAIAmag'
-    label_values = data_test[label].to_numpy()
-    inds = np.nonzero(~np.isnan(label_values))
-    plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=15)
+plot_cluster(latent_vectors, kmeans_labels, mydir)
+plot_anomaly(latent_vectors, mydir)
 
-    label = 'Teff'
-    label_values = data_test[label].to_numpy()
-    inds = np.nonzero(~np.isnan(label_values))
-    plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+data_test = data.iloc[idx_test]
+label = 'Solution'
+cluster_labels = np.unique(data_test[label])
+label_values = np.array([np.nonzero(cluster_labels == sol)[0][0] for sol in data_test['Solution']])
+plot_tsne_cmap(latent_vectors, label_values, label, mydir, cluster_labels=cluster_labels)
 
-    movie_cluster(latent_vectors, kmeans_labels, mydir)    
-    movie_light_curves(light_curves, mydir)
+label = 'GAIAmag'
+label_values = data_test[label].to_numpy()
+inds = np.nonzero(~np.isnan(label_values))
+plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
 
-    plot_latent_images(decoder, 16, latent_dim, latent_vectors, mydir)
+label = 'Teff'
+label_values = data_test[label].to_numpy()
+inds = np.nonzero(~np.isnan(label_values))
+plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
 
-    # Plot intermediate outputs
-    visualize_layer_outputs(encoder, X_test, 4, mydir)
+plot_tsne_inset(latent_vectors, light_curves, kmeans_labels, mydir)
 
-except:
-    pdb.set_trace()
+movie_cluster(latent_vectors, kmeans_labels, mydir)    
+# movie_light_curves(light_curves, mydir)
+
+# plot_latent_images(decoder, 16, latent_dim, latent_vectors, mydir)
+
+# Plot intermediate outputs
+# visualize_layer_outputs(encoder, X_test, 4, mydir)
+
 
 pdb.set_trace()

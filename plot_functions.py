@@ -46,6 +46,64 @@ def plot_tsne(latent_vectors, mydir):
     plt.ylabel('t-SNE Dimension 2')
     plt.savefig(mydir+'tsne.png')
 
+def plot_tsne_inset(latent_vectors, light_curves, cluster_labels, mydir, cycles=3):
+    """Create a scatter plot of the t-SNE latent space"""
+    from sklearn.manifold import TSNE
+    import matplotlib.cm as cm
+    import matplotlib as mpl
+
+    # Set the text color to white
+    mpl.rcParams['text.color'] = 'white'
+    
+    # Perform t-SNE dimensionality reduction on the latent vectors
+    tsne = TSNE(n_components=2, random_state=42)
+    latent_tsne = tsne.fit_transform(latent_vectors)
+
+    # Extract the t-SNE coordinates
+    tsne_x = latent_tsne[:, 0]
+    tsne_y = latent_tsne[:, 1]
+
+    clusters = np.unique(cluster_labels)
+
+    # Create colors suitable to a black background
+    cmap = cm.get_cmap('tab20', len(clusters))
+    colors = cmap.colors
+
+    for c, cluster in zip(colors, clusters):
+        # Create a scatter plot
+        fig, ax = plt.subplots(facecolor='black')
+        ax.set_axis_off()
+
+        for c1, cluster1 in zip(colors, clusters):
+            inds = np.nonzero(cluster_labels == cluster1)[0]
+            plt.scatter(tsne_x[inds], tsne_y[inds], c=c1, s=2, alpha=0.8)
+        # plt.scatter(tsne_x, tsne_y, c='w', s=2, alpha=0.8)
+        width = np.abs(np.diff(ax.get_xlim()))[0] * 0.1
+        height = np.abs(np.diff(ax.get_ylim()))[0] * 0.04
+        inds = np.nonzero(cluster_labels == cluster)[0]
+        for i in range(len(inds)):
+            inset_ax = ax.inset_axes([tsne_x[inds][i], tsne_y[inds][i], width, height],
+                                     transform=ax.transData)
+
+            # Plot light curve on inset axis
+            lc = light_curves[inds][i]
+            n_pts = len(lc)
+            for j in range(cycles):
+                inset_ax.plot(np.arange(j*n_pts, (j+1)*n_pts), lc, '-k', lw=0.5)
+
+            # inset_ax.plot(light_curves[inds][i][0], light_curves[inds][i][1], '-k', lw=0.5)
+            inset_ax.spines['top'].set_color(c)
+            inset_ax.spines['bottom'].set_color(c)
+            inset_ax.spines['left'].set_color(c)
+            inset_ax.spines['right'].set_color(c)
+            inset_ax.set_xticks([])
+            inset_ax.set_yticks([])
+
+        
+            plt.savefig(mydir+'tsne_cluster_'+str(cluster)+'.png', dpi=300)
+        print(mydir+'tsne_cluster_'+str(cluster)+'.png')
+
+
 
 def plot_tsne_cmap(latent_vectors, label_values, label, mydir, latent_tsne=None, cluster_labels=None):
     import matplotlib.cm as cm
@@ -379,7 +437,7 @@ def movie_cluster(latent_vectors, cluster_labels, mydir, latent_tsne=None):
     ax.grid(False)    
     
     # Animation parameters
-    frames = 180  # Number of frames for the animation
+    frames = 1800  # Number of frames for the animation
     elev_start = 30
     elev_end = 60
     azim_start = 0
@@ -538,89 +596,3 @@ def movie_light_curves(light_curves, mydir, total_frames=100, errors=None, ticid
     # Save the animation as an MP4 file
     animation.save(mydir+filename, writer='ffmpeg')#, dpi=200)
     print('Saved '+mydir+filename)
-
-def movie_cluster_insets(light_curves, errors, latent_vectors, latent_tsne, cluster_labels, mydir):
-        
-    import numpy as np
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d import Axes3D
-    from matplotlib.animation import FuncAnimation
-    from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-    import matplotlib.cm as cm
-    
-    # Assuming you have your 3D t-SNE data stored in a variable called 'tsne_data'
-    # tsne_data should be a 2D numpy array of shape (n_samples, 3)
-    
-    # Assuming you have your light curves stored in a variable called 'light_curves'
-    # light_curves should be a 2D numpy array of shape (n_samples, n_time_points)
-    
-    # Assuming you have your cluster labels stored in a variable called 'cluster_labels'
-    # cluster_labels should be a 1D numpy array of shape (n_samples,)
-    
-    # Define a color map for the clusters
-    n_clusters = len(np.unique(cluster_labels))
-    cmap = cm.get_cmap('tab20', n_clusters)    
-    
-    # Create a figure and axes for the animation
-    fig = plt.figure(figsize=(8, 8))
-    ax = fig.add_subplot(111, projection='3d')
-    
-    # Initialize the scatter plot
-    scatter = ax.scatter(latent_tsne[:, 0], latent_tsne[:, 1], latent_tsne[:, 2], c=cluster_labels, cmap=cmap)
-    
-    # Animation parameters
-    frames = 10  # Number of frames for the animation
-    elev_start = 30
-    elev_end = 60
-    azim_start = 0
-    azim_end = 100# 360
-    zoom_start = 0.8
-    zoom_end = 0.4
-    
-    # Update function for the animation
-    def update(frame):
-        elev = elev_start + (elev_end - elev_start) * frame / frames
-        azim = azim_start + (azim_end - azim_start) * frame / frames
-        zoom = zoom_start + (zoom_end - zoom_start) * frame / frames
-    
-        ax.view_init(elev, azim)
-        ax.dist *= zoom 
-        
-    # Create the animation
-    animation = FuncAnimation(fig, update, frames=np.arange(0, frames, 2), interval=100)
-    
-    # Define the inset parameters
-    inset_size = 0.2  # Size of the inset as a fraction of the main plot size
-    inset_pad = 0.1  # Padding between the inset and the main plot
-
-    
-    # Function to create the inset axes for each point
-    def create_inset_axes(ax, light_curve, cluster_label):
-        inset_ax = inset_axes(ax, width=inset_size, height=inset_size, loc='upper left', borderpad=inset_pad)
-        inset_ax.plot(light_curve)
-    
-        # Set the border color based on the cluster label
-        border_color = cmap(cluster_label)
-        for spine in inset_ax.spines.values():
-            spine.set_edgecolor(border_color)
-    
-        inset_ax.set_axis_off()
-    
-    # Function to update the insets in each frame
-    def update_insets(frame):
-        for point, light_curve, cluster_label in zip(scatter.get_offsets(), light_curves, cluster_labels):
-            create_inset_axes(ax, light_curve, cluster_label)
-    
-    # Call the update_insets function once to initialize the insets
-    update_insets(0)
-    
-    # Create the animation
-    animation = FuncAnimation(fig, update, frames=np.arange(0, 360, 2), interval=100)
-    
-    # Set up saving options
-    filename = '3d_tsne_with_light_curves.mp4'
-    
-    # Save the animation as an MP4 file
-    animation.save(mydir+filename, writer='ffmpeg')
-    print('Saved '+mydir+filename)
-        
