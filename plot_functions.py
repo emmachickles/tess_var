@@ -140,7 +140,7 @@ def plot_latent_images(decoder, n, latent_dim, latent_vectors, mydir):
     fig1.savefig(os.path.join(mydir, 'latent_tsne.png'))
     plt.close()
 
-def plot_original_vs_reconstructed(original_data, reconstructed_data, num_examples, mydir, cycles=3):
+def plot_original_vs_reconstructed(original_data, reconstructed_data, num_examples, mydir, cycles=3, dim=1):
     plt.figure(figsize=(20, 8))
 
     reconstruction_loss = np.mean(np.square(original_data - reconstructed_data), axis=1).reshape(-1)
@@ -149,8 +149,11 @@ def plot_original_vs_reconstructed(original_data, reconstructed_data, num_exampl
         plt.subplot(2, num_examples, i + 1)
         n_pts = len(original_data[i])
         for j in range(cycles):
-            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
-                     original_data[i])
+            if dim == 1:
+                plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                         original_data[i])
+            if dim == 2:
+                plt.imshow(original_data[i])
         plt.title('Original')
         plt.xticks([])
         # plt.yticks([])
@@ -158,12 +161,17 @@ def plot_original_vs_reconstructed(original_data, reconstructed_data, num_exampl
         plt.subplot(2, num_examples, num_examples + i + 1)
         n_pts = len(reconstructed_data[i])
         for j in range(cycles):
-            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
-                     reconstructed_data[i])
+            if dim == 1:
+                plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                         reconstructed_data[i])
+            if dim == 2:
+                plt.imshow(reconstructed_data[i])
         
 
         plt.title('Reconstructed\nLoss: '+str(np.round(reconstruction_loss[i], 5)))
         plt.xticks([])
+        if dim == 2:
+            plt.yticks([])
         # plt.yticks([])
 
     plt.tight_layout()
