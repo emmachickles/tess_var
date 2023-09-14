@@ -9,6 +9,7 @@ def plot_loss(history, mydir):
     epochs = range(1, len(loss) + 1)
 
     # Plot loss vs epoch
+    plt.figure()
     plt.plot(epochs, loss, 'b-', label='Training Loss')
     plt.plot(epochs, val_loss, 'r-', label='Validation Loss')
     plt.title('Loss vs Epoch')
@@ -16,6 +17,8 @@ def plot_loss(history, mydir):
     plt.ylabel('Loss')
     plt.legend()
     plt.savefig(mydir + 'loss.png')
+    print('Saved '+mydir + 'loss.png')
+    plt.close()
 
 def tsne(latent_vectors, n_components=2):
     from sklearn.manifold import TSNE
@@ -45,8 +48,9 @@ def plot_tsne(latent_vectors, mydir):
     plt.xlabel('t-SNE Dimension 1')
     plt.ylabel('t-SNE Dimension 2')
     plt.savefig(mydir+'tsne.png')
+    print('Saved '+mydir+'tsne.png')
 
-def plot_tsne_inset(latent_vectors, light_curves, cluster_labels, mydir, cycles=3):
+def plot_tsne_inset(latent_vectors, light_curves, cluster_labels, mydir, cycles=3, dim=2):
     """Create a scatter plot of the t-SNE latent space"""
     from sklearn.manifold import TSNE
     import matplotlib.cm as cm
@@ -81,15 +85,19 @@ def plot_tsne_inset(latent_vectors, light_curves, cluster_labels, mydir, cycles=
         width = np.abs(np.diff(ax.get_xlim()))[0] * 0.1
         height = np.abs(np.diff(ax.get_ylim()))[0] * 0.04
         inds = np.nonzero(cluster_labels == cluster)[0]
-        for i in range(len(inds)):
+        for i in range(min(100,len(inds))):
             inset_ax = ax.inset_axes([tsne_x[inds][i], tsne_y[inds][i], width, height],
                                      transform=ax.transData)
 
             # Plot light curve on inset axis
             lc = light_curves[inds][i]
             n_pts = len(lc)
-            for j in range(cycles):
-                inset_ax.plot(np.arange(j*n_pts, (j+1)*n_pts), lc, '-k', lw=0.5)
+            if dim == 1:
+                for j in range(cycles):
+                    inset_ax.plot(np.arange(j*n_pts, (j+1)*n_pts), lc, '-k', lw=0.5)
+            if dim == 2:
+                img_len = int(np.sqrt(len(lc)))
+                inset_ax.imshow(lc.reshape((img_len, img_len)))
 
             # inset_ax.plot(light_curves[inds][i][0], light_curves[inds][i][1], '-k', lw=0.5)
             inset_ax.spines['top'].set_color(c)
@@ -148,34 +156,57 @@ def plot_tsne_cmap(latent_vectors, label_values, label, mydir, latent_tsne=None,
     print('Saved '+mydir + 'tsne_'+label+'.png')
     
 
-def plot_latent_images(decoder, n, latent_dim, latent_vectors, mydir):
+def plot_latent_images(decoder, n, latent_dim, latent_vectors, mydir, orig_vector=None, perturbation=1, dim=1, cycles=3):
     """Plots n x n decoded images sampled from the latent space and saves the figure to mydir."""
     import tensorflow_probability as tfp
     import tensorflow as tf
     from sklearn.manifold import TSNE
 
-    norm = tfp.distributions.Normal(0, 1)
-    grid_points = norm.quantile(np.linspace(0.05, 0.95, n))
-    grid_points = np.reshape(grid_points, (n, 1))
-    z = tf.repeat(grid_points, repeats=latent_dim, axis=1)  # Repeat grid_points for each latent dimension
-    x_decoded = decoder.predict(z, steps=1)  # Generate decoded images
+    # norm = tfp.distributions.Normal(0, 1)
+    # grid_points = norm.quantile(np.linspace(0.05, 0.95, n))
+    # grid_points = np.reshape(grid_points, (n, 1))
+    # z = tf.repeat(grid_points, repeats=latent_dim, axis=1)  # Repeat grid_points for each latent dimension
 
     nrow = int(np.sqrt(n))
     ncol = int(np.sqrt(n))
+    
+    if orig_vector is None:
+        orig_vector = latent_vectors[0]
+    x = np.linspace(0, perturbation, nrow)
+    y = np.linspace(0, perturbation, ncol)
+    gridx, gridy = np.meshgrid(x, y)
+    z = []
+    for i in range(nrow):
+        for j in range(ncol):
+            perturbed_vector = np.copy(orig_vector)
+            perturbed_vector[0] += x[i]
+            perturbed_vector[1] += y[j]
+            z.append(perturbed_vector)
+    z = np.array(z)
+    x_decoded = decoder.predict(z, steps=1)  # Generate decoded images
 
     fig, ax = plt.subplots(nrow, ncol, figsize=(15,8)) # Plot light curves
     for i in range(nrow):
         for j in range(ncol):
-            ax[i, j].plot(x_decoded[nrow*i + j])
+            if dim == 1:
+                for k in range(cycles):
+                    n_pts = len(x_decoded[nrow*i + j])
+                    ax[i, j].plot(np.arange(k*n_pts, (k+1)*n_pts), 
+                                  x_decoded[nrow*i + j])
+            if dim == 2:
+                img_len = int(np.sqrt(len(x_decoded[nrow*i + j])))
+                ax[i,j].imshow(x_decoded[nrow*i + j].reshape((img_len,img_len))) 
             ax[i, j].set_xticks([])
             # ax[i, j].set_yticks([])
 
     fig.savefig(os.path.join(mydir, 'latent_images.png'))
+    print('Saved '+os.path.join(mydir, 'latent_images.png'))
     plt.close()
 
     # Perform t-SNE dimensionality reduction on the latent vectors and grid_points
     tsne = TSNE(n_components=2, random_state=42)
-    all_vectors = np.append(latent_vectors, z.eval(session=tf.compat.v1.Session()), 0)
+    # all_vectors = np.append(latent_vectors, z.eval(session=tf.compat.v1.Session()), 0)
+    all_vectors = np.append(latent_vectors, z, 0)
     latent_tsne = tsne.fit_transform(all_vectors)
 
     # Extract the t-SNE coordinates
@@ -196,6 +227,7 @@ def plot_latent_images(decoder, n, latent_dim, latent_vectors, mydir):
         ax1.annotate('{},{}'.format(row,col), (x, y+1.),
                      ha='center', c='k')
     fig1.savefig(os.path.join(mydir, 'latent_tsne.png'))
+    print('Saved '+os.path.join(mydir, 'latent_tsne.png'))
     plt.close()
 
 def plot_original_vs_reconstructed(original_data, reconstructed_data, num_examples, mydir, cycles=3, dim=1):
@@ -206,24 +238,25 @@ def plot_original_vs_reconstructed(original_data, reconstructed_data, num_exampl
     for i in range(num_examples):
         plt.subplot(2, num_examples, i + 1)
         n_pts = len(original_data[i])
-        for j in range(cycles):
-            if dim == 1:
+        if dim == 1:
+            for j in range(cycles):
                 plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
                          original_data[i])
-            if dim == 2:
-                plt.imshow(original_data[i])
+        if dim == 2:
+            img_len = int(np.sqrt(len(original_data[i])))
+            plt.imshow(original_data[i].reshape((img_len,img_len)))
         plt.title('Original')
         plt.xticks([])
         # plt.yticks([])
 
         plt.subplot(2, num_examples, num_examples + i + 1)
         n_pts = len(reconstructed_data[i])
-        for j in range(cycles):
-            if dim == 1:
+        if dim == 1:
+            for j in range(cycles):
                 plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
                          reconstructed_data[i])
-            if dim == 2:
-                plt.imshow(reconstructed_data[i])
+        if dim == 2:
+            plt.imshow(reconstructed_data[i].reshape((img_len,img_len)))
         
 
         plt.title('Reconstructed\nLoss: '+str(np.round(reconstruction_loss[i], 5)))
@@ -236,7 +269,7 @@ def plot_original_vs_reconstructed(original_data, reconstructed_data, num_exampl
     plt.savefig(os.path.join(mydir, 'original_vs_reconstructed.png'))
     plt.close()
 
-def plot_best_worst_reconstructed(original_data, reconstructed_data, num_examples, mydir, cycles=3):
+def plot_best_worst_reconstructed(original_data, reconstructed_data, num_examples, mydir, cycles=3, dim=1):
     reconstruction_loss = np.mean(np.square(original_data - reconstructed_data), axis=1).reshape(-1)
     worst_indices = np.argsort(reconstruction_loss)[-num_examples:][::-1]
     worst_loss = np.sort(reconstruction_loss)[-num_examples:][::-1]
@@ -245,9 +278,13 @@ def plot_best_worst_reconstructed(original_data, reconstructed_data, num_example
     for i, idx in enumerate(worst_indices):
         plt.subplot(2, num_examples, i + 1)
         n_pts = len(original_data[idx])
-        for j in range(cycles):
-            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
-                     original_data[idx])
+        if dim == 1:
+            for j in range(cycles):
+                plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                         original_data[idx])
+        if dim == 2:
+            img_len = int(np.sqrt(len(original_data[idx])))
+            plt.imshow(original_data[idx].reshape((img_len,img_len)))                
         plt.title('Original')
         plt.xticks([])
         # plt.yticks([])
@@ -255,9 +292,13 @@ def plot_best_worst_reconstructed(original_data, reconstructed_data, num_example
 
         plt.subplot(2, num_examples, num_examples + i + 1)
         n_pts = len(reconstructed_data[idx])
-        for j in range(cycles):
-            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
-                     reconstructed_data[idx])
+        if dim == 1:
+            for j in range(cycles):
+
+                plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                         reconstructed_data[idx])
+        if dim == 2:
+            plt.imshow(reconstructed_data[idx].reshape((img_len,img_len)))                
         plt.title('Reconstructed\nLoss: '+str(np.round(worst_loss[i], 5)))
         plt.xticks([])
         # plt.yticks([])
@@ -273,18 +314,24 @@ def plot_best_worst_reconstructed(original_data, reconstructed_data, num_example
     for i, idx in enumerate(best_indices):
         plt.subplot(2, num_examples, i + 1)
         n_pts = len(original_data[idx])
-        for j in range(cycles):
-            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
-                     original_data[idx])
+        if dim == 1:
+            for j in range(cycles):
+                plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                         original_data[idx])
+        if dim == 2:
+            plt.imshow(original_data[idx].reshape((img_len,img_len)))
         plt.title('Original')
         plt.xticks([])
         # plt.yticks([])
 
         plt.subplot(2, num_examples, num_examples + i + 1)
         n_pts = len(reconstructed_data[idx])
-        for j in range(cycles):
-            plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
-                     reconstructed_data[idx])
+        if dim == 1:
+            for j in range(cycles):
+                plt.plot(np.arange(j*n_pts, (j+1)*n_pts),
+                         reconstructed_data[idx])
+        if dim == 2:
+            plt.imshow(reconstructed_data[idx].reshape((img_len,img_len)))
         plt.title('Reconstructed\nLoss: '+str(np.round(best_loss[i], 5)))
         plt.xticks([])
         # plt.yticks([])

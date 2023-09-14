@@ -25,7 +25,8 @@ np.random.seed(42)
 tf.random.set_seed(42)
 
 # Directory to save all outputs to
-mydir = '/Users/emma/Desktop/230801/'
+# mydir = '/Users/emma/Desktop/230801/'
+mydir = '/scratch/echickle/cvae_mnist/'
 os.makedirs(mydir, exist_ok=True)
 
 # Hyperparameters
@@ -37,6 +38,8 @@ batch_size = 32
 desired_length = 256 # original MNIST shape =28*28=784
 dense_length = desired_length // (2 ** num_conv_layers)
 beta = 1
+epochs = 20
+imbalance = True
 
 # Load MNIST dataset
 # Training images: (60000, 28, 28)
@@ -46,6 +49,15 @@ beta = 1
 mnist = tf.keras.datasets.mnist
 (X_train, Y_train), (X_test, Y_test) = mnist.load_data()
 
+if imbalance:
+    inds = np.nonzero(Y_train == 1)[0]
+    X_train = np.delete(X_train, inds[500:], axis=0)
+    Y_train = np.delete(Y_train, inds[500:])
+
+    inds = np.nonzero(Y_train == 2)[0]
+    X_train = np.delete(X_train, inds[500:], axis=0)
+    Y_train = np.delete(Y_train, inds[500:])
+    
 fig, ax = plt.subplots(nrows=2, ncols=10, figsize=(16,4))
 for i in range(10):
     ax[0][i].imshow( X_train[ np.nonzero(Y_train==i)[0][0] ] )
@@ -84,7 +96,9 @@ X_test = (X_test - mean) / std
 # Add additional axis
 val_split = len(X_test) // 2
 X_val = X_test[:val_split]
+Y_val = Y_test[:val_split]
 X_test = X_test[val_split:]
+Y_test = Y_test[val_split:]
 X_train = X_train.reshape(-1, desired_length, 1)
 X_val = X_val.reshape(-1, desired_length, 1)
 X_test = X_test.reshape(-1, desired_length, 1)
@@ -146,60 +160,72 @@ def vae_loss(inputs, outputs):
 cvae.compile(optimizer='adam', loss=vae_loss)
 
 # Train the CVAE
-history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=1,
+history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=epochs,
                    batch_size=batch_size) 
 
 # Evaluate the model on the test set
 loss = cvae.evaluate(X_test, X_test)
 print('Test Loss:', loss)
 
-try:
-    # Encode the test set samples
-    # latent_vectors = encoder.predict(X_test)[2]
+plot_loss(history, mydir)
 
-    # plot_tsne(latent_vectors, mydir)
+# Encode the test set samples
+latent_vectors = encoder.predict(X_test)[2]
 
-    # # Obtain the reconstructed data from the CVAE model
-    reconstructed_data = cvae.predict(X_test)
+plot_tsne(latent_vectors, mydir)
 
-    # Plot the original vs reconstructed light curves
-    plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir, dim=2, cycle=1)
+# Obtain the reconstructed data from the CVAE model
+reconstructed_data = cvae.predict(X_test)
 
-    # # Plot worst reconstructions
-    # plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir)
+# Plot the original vs reconstructed light curves
+plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir, dim=2, cycles=1)
 
-    # # Plot reconstruction loss distribution
-    # plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
+# Plot worst reconstructions
+plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir, dim=2)
 
-    # kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=15)
-    # plot_cluster(latent_vectors, cluster_labels, mydir)
-    # plot_anomaly(latent_vectors, mydir)
+# Plot reconstruction loss distribution
+plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
 
-    # data_test = data.iloc[idx_test]
-    # label = 'Solution'
-    # cluster_labels = np.unique(data_test[label])
-    # label_values = np.array([np.nonzero(cluster_labels == sol)[0][0] for sol in data_test['Solution']])
-    # plot_tsne_cmap(latent_vectors, label_values, label, mydir, cluster_labels=cluster_labels)
-    
-    # label = 'GAIAmag'
-    # label_values = data_test[label].to_numpy()
-    # inds = np.nonzero(~np.isnan(label_values))
-    # plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+plot_latent_images(decoder, 25, latent_dim, latent_vectors, mydir, dim=2)
 
-    # label = 'Teff'
-    # label_values = data_test[label].to_numpy()
-    # inds = np.nonzero(~np.isnan(label_values))
-    # plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=10)
+plot_cluster(latent_vectors, kmeans_labels, mydir)
+plot_anomaly(latent_vectors, mydir)
 
-    # movie_cluster(latent_vectors, kmeans_labels, mydir)    
-    # movie_light_curves(light_curves, mydir)
+plot_tsne_cmap(latent_vectors, Y_test, 'Y_test', mydir)
+# movie_cluster(latent_vectors, kmeans_labels, mydir)    
+plot_tsne_inset(latent_vectors, X_test, kmeans_labels, mydir, dim=2)
 
-    # plot_latent_images(decoder, 16, latent_dim, latent_vectors, mydir)
 
-    # # Plot intermediate outputs
-    # visualize_layer_outputs(encoder, X_test, 4, mydir)
-
-except:
-    pdb.set_trace()
+# # Plot intermediate outputs
+# visualize_layer_outputs(encoder, X_test, 4, mydir)
 
 pdb.set_trace()
+
+# Make a cut based on loss
+reconstruction_loss = np.mean(np.square(X_test - reconstructed_data), axis=1).reshape(-1)
+inds = np.nonzero(reconstruction_loss < 0.4)[0]
+X_test, Y_test = X_test[inds], Y_test[inds]
+reconstructed_data = reconstructed_data[inds]
+latent_vectors = latent_vectors[inds]
+
+
+# Plot the original vs reconstructed light curves
+plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir, dim=2, cycles=1)
+
+# Plot worst reconstructions
+plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir, dim=2)
+
+# Plot reconstruction loss distribution
+plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
+
+plot_latent_images(decoder, 25, latent_dim, latent_vectors, mydir, dim=2)
+
+kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=10)
+plot_cluster(latent_vectors, kmeans_labels, mydir)
+plot_anomaly(latent_vectors, mydir)
+
+plot_tsne_cmap(latent_vectors, Y_test, 'Y_test', mydir)
+# movie_cluster(latent_vectors, kmeans_labels, mydir)    
+plot_tsne_inset(latent_vectors, X_test, kmeans_labels, mydir, dim=2)
+
