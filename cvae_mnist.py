@@ -50,13 +50,20 @@ mnist = tf.keras.datasets.mnist
 (X_train, Y_train), (X_test, Y_test) = mnist.load_data()
 
 if imbalance:
-    inds = np.nonzero(Y_train == 1)[0]
-    X_train = np.delete(X_train, inds[500:], axis=0)
-    Y_train = np.delete(Y_train, inds[500:])
-
-    inds = np.nonzero(Y_train == 2)[0]
-    X_train = np.delete(X_train, inds[500:], axis=0)
-    Y_train = np.delete(Y_train, inds[500:])
+    for y in [0,3,4,5,6,7,8,9]:
+        inds = np.nonzero(Y_train == y)[0]
+        X_train = np.delete(X_train, inds[3000:], axis=0)
+        Y_train = np.delete(Y_train, inds[3000:])
+    for y in [1,2]:
+        inds = np.nonzero(Y_train == y)[0]
+        X_train = np.delete(X_train, inds[3000:], axis=0)
+        Y_train = np.delete(Y_train, inds[3000:])
+    # inds = np.nonzero(Y_train == 1)[0]
+    # X_train = np.delete(X_train, inds[500:], axis=0)
+    # Y_train = np.delete(Y_train, inds[500:])
+    # inds = np.nonzero(Y_train == 2)[0]
+    # X_train = np.delete(X_train, inds[500:], axis=0)
+    # Y_train = np.delete(Y_train, inds[500:])
     
 fig, ax = plt.subplots(nrows=2, ncols=10, figsize=(16,4))
 for i in range(10):
@@ -169,10 +176,13 @@ print('Test Loss:', loss)
 
 plot_loss(history, mydir)
 
+
 # Encode the test set samples
 latent_vectors = encoder.predict(X_test)[2]
 
 plot_tsne(latent_vectors, mydir)
+
+plot_tsne_cmap(latent_vectors, Y_test, 'Y_test', mydir)
 
 # Obtain the reconstructed data from the CVAE model
 reconstructed_data = cvae.predict(X_test)
@@ -192,7 +202,6 @@ kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=10)
 plot_cluster(latent_vectors, kmeans_labels, mydir)
 plot_anomaly(latent_vectors, mydir)
 
-plot_tsne_cmap(latent_vectors, Y_test, 'Y_test', mydir)
 # movie_cluster(latent_vectors, kmeans_labels, mydir)    
 plot_tsne_inset(latent_vectors, X_test, kmeans_labels, mydir, dim=2)
 

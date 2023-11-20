@@ -33,7 +33,7 @@ data_dir = '/scratch/data/tess/lcur/ffi/cvae_data/'
 sector_list = [56]
 
 # Directory to save all outputs to
-mydir = '/scratch/echickle/cvae/'
+mydir = '/scratch/echickle/cvae_ffi/'
 os.makedirs(mydir, exist_ok=True)
 
 # Hyperparameters
@@ -51,6 +51,13 @@ for sector in sector_list:
     padded_flux_data.extend(np.load(data_dir+'sector-%02d_data.npy'%sector))
     ticid.extend(np.load(data_dir+'sector-%02d_ticid.npy'%sector))
 padded_flux_data = np.array(padded_flux_data) # Approx 34 GB
+ticid = np.array(ticid)
+
+# !!
+inds = np.nonzero( np.std(padded_flux_data, axis=1) > 0.1)
+padded_flux_data = padded_flux_data[inds]
+ticid = ticid[inds]
+
 
 # Determine the desired length based on the model architecture
 max_time_length = padded_flux_data.shape[1]
@@ -146,10 +153,10 @@ try:
     reconstructed_data = cvae.predict(X_test)
 
     # Plot the original vs reconstructed light curves
-    plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir)
+    plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir, cycles=1)
 
     # Plot worst reconstructions
-    plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir)
+    plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir, cycles=1)
 
     # Plot reconstruction loss distribution
     plot_reconstruction_distribution(X_test, reconstructed_data, mydir)

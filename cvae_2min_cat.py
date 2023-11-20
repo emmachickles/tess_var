@@ -34,7 +34,7 @@ sector_list = list(range(1,27))
 # sector_list = [56]
 
 # Directory to save all outputs to
-mydir = '/scratch/echickle/cvae/'
+mydir = '/scratch/echickle/cvae_2min/'
 os.makedirs(mydir, exist_ok=True)
 
 # Hyperparameters
@@ -43,6 +43,9 @@ num_conv_layers = 5  # Number of convolutional layers in the encoder and decoder
 num_filters = 32  # Number of filters in each convolutional layer
 kernel_size = 3  # Kernel size for the convolutional layers
 batch_size = 32
+epochs=30
+lr=0.00001
+fully_connected=True
 
 # Determine the desired length based on the model architecture
 array_length = 128
@@ -70,9 +73,20 @@ light_curves = light_curves[inds]
 ticid = ticid[inds]
 
 # Standardize
-mean = np.mean(light_curves, axis=1, keepdims=True)
-std = np.std(light_curves, axis=1, keepdims=True)
+# pdb.set_trace()
+
+mean = np.mean(light_curves)
+std = np.std(light_curves)
 light_curves = (light_curves - mean) / std 
+
+# mean = np.mean(light_curves, axis=1, keepdims=True)
+# std = np.std(light_curves,axis=1,keepdims=True)
+# light_curves = (light_curves - mean) / std 
+
+# print(mean)
+# print(std)
+
+# pdb.set_trace()
 
 # Train-validation-test split
 X_train, X_test, idx_train, idx_test = train_test_split(light_curves, np.arange(len(light_curves)), test_size=0.2, random_state=42)
@@ -93,11 +107,18 @@ X_test = X_test.reshape(-1, desired_length, 1)
 # Define the encoder
 inputs = Input(shape=(desired_length, 1))
 x = inputs
-for _ in range(num_conv_layers):
-    x = Conv1D(filters=num_filters, kernel_size=kernel_size, activation='elu', padding='same', strides=2,
-               kernel_regularizer=regularizers.l2(0.01))(x)
-   # x = MaxPooling1D(pool_size=2)(x)
-x = Flatten()(x)
+
+if fully_connected:
+    x = Flatten()(x)
+    for _ in range(4):
+        x = Dense(x.shape[1]/2, activation='elu')(x)
+else:
+    for _ in range(num_conv_layers):
+        x = Conv1D(filters=num_filters, kernel_size=kernel_size, activation='elu', padding='same', strides=2,
+                   kernel_regularizer=regularizers.l2(0.01))(x)
+       # x = MaxPooling1D(pool_size=2)(x)
+    x = Flatten()(x)
+
 z_mean = Dense(latent_dim)(x)
 z_log_var = Dense(latent_dim)(x)
 
@@ -109,16 +130,23 @@ def sampling(args):
     epsilon = tf.random.normal(shape=(batch_size, latent_dim), mean=0.0, stddev=1.0)
     return z_mean + tf.exp(0.5 * z_log_var) * epsilon
 
+
 z = Lambda(sampling)([z_mean, z_log_var])
 
 # Define the decoder
 latent_inputs = Input(shape=(latent_dim,))
-x = Dense(dense_length * num_filters)(latent_inputs)
-x = Reshape((dense_length, num_filters))(x)
-for _ in range(num_conv_layers):
-    x = Conv1DTranspose(filters=num_filters, kernel_size=kernel_size, activation='elu', padding='same', strides=2,  kernel_regularizer=regularizers.l2(0.01))(x)
-    # x = UpSampling1D(size=2)(x)
-outputs = Conv1DTranspose(filters=1, kernel_size=kernel_size, activation='linear', padding='same')(x)
+if fully_connected:
+    x = Dense(latent_inputs.shape[1]*2, activation='elu')(latent_inputs)
+    for _ in range(4):
+        x = Dense(x.shape[1]*2,activation='elu')(x)
+    outputs=Reshape((x.shape[1], 1))(x)
+else:
+    x = Dense(dense_length * num_filters)(latent_inputs)
+    x = Reshape((dense_length, num_filters))(x)
+    for _ in range(num_conv_layers):
+        x = Conv1DTranspose(filters=num_filters, kernel_size=kernel_size, activation='elu', padding='same', strides=2,  kernel_regularizer=regularizers.l2(0.01))(x)
+        # x = UpSampling1D(size=2)(x)
+    outputs = Conv1DTranspose(filters=1, kernel_size=kernel_size, activation='linear', padding='same')(x)
 
 # Connect encoder and decoder
 encoder = Model(inputs, [z_mean, z_log_var, z])
@@ -142,17 +170,21 @@ def vae_loss(inputs, outputs):
     reconstruction_loss = tf.reduce_sum(
         tf.square(inputs - outputs), axis=[1, 2]
     )  # Sum over the dimensions of the input data
+
     kl_loss = -0.5 * tf.reduce_sum(
         1 + z_log_var - tf.square(z_mean) - tf.exp(z_log_var), axis=1
     )  # Sum over the latent dimensions
     loss = tf.reduce_mean(reconstruction_loss + kl_loss)
+    # # print(kl_loss)
+    # loss = reconstruction_loss
+    # print(reconstruction_loss)
     return loss
 
 # Compile the model
-cvae.compile(optimizer='adam', loss=vae_loss)
+cvae.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=lr), loss=vae_loss)
 
 # Train the CVAE
-history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=30,
+history = cvae.fit(X_train, X_train, validation_data=(X_val, X_val), epochs=epochs,
                    batch_size=batch_size) 
 
 # Evaluate the model on the test set
@@ -198,7 +230,7 @@ label_values = data_test[label].to_numpy()
 inds = np.nonzero(~np.isnan(label_values))
 plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
 
-plot_tsne_inset(latent_vectors, light_curves, kmeans_labels, mydir)
+plot_tsne_inset(latent_vectors, light_curves, kmeans_labels, mydir, dim=1)
 
 movie_cluster(latent_vectors, kmeans_labels, mydir)    
 # movie_light_curves(light_curves, mydir)
@@ -210,3 +242,45 @@ movie_cluster(latent_vectors, kmeans_labels, mydir)
 
 
 pdb.set_trace()
+
+reconstruction_loss = np.mean(np.square(X_test - reconstructed_data), axis=1).reshape(-1)
+inds = np.nonzero(reconstruction_loss < 0.1)[0]
+X_test = X_test[inds]
+reconstructed_data = reconstructed_data[inds]
+latent_vectors = latent_vectors[inds]
+light_curves = light_curves[inds]
+data_test = data_test.iloc[inds]
+
+plot_tsne(latent_vectors, mydir)
+
+# Plot the original vs reconstructed light curves
+plot_original_vs_reconstructed(X_test[:10], reconstructed_data[:10], 10, mydir)
+
+# Plot worst reconstructions
+plot_best_worst_reconstructed(X_test, reconstructed_data, 10, mydir)
+
+# Plot reconstruction loss distribution
+plot_reconstruction_distribution(X_test, reconstructed_data, mydir)
+
+kmeans_labels=cluster(latent_vectors, cluster_method='kmeans', n_clusters=15)
+plot_cluster(latent_vectors, kmeans_labels, mydir)
+plot_anomaly(latent_vectors, mydir)
+
+label = 'Solution'
+cluster_labels = np.unique(data_test[label])
+label_values = np.array([np.nonzero(cluster_labels == sol)[0][0] for sol in data_test['Solution']])
+plot_tsne_cmap(latent_vectors, label_values, label, mydir, cluster_labels=cluster_labels)
+
+label = 'GAIAmag'
+label_values = data_test[label].to_numpy()
+inds = np.nonzero(~np.isnan(label_values))
+plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+
+label = 'Teff'
+label_values = data_test[label].to_numpy()
+inds = np.nonzero(~np.isnan(label_values))
+plot_tsne_cmap(latent_vectors[inds], label_values[inds], label, mydir)
+
+plot_tsne_inset(latent_vectors, light_curves, kmeans_labels, mydir, dim=1)
+
+movie_cluster(latent_vectors, kmeans_labels, mydir)    

@@ -492,11 +492,11 @@ def movie_cluster(latent_vectors, cluster_labels, mydir, latent_tsne=None):
     ax.grid(False)    
     
     # Animation parameters
-    frames = 1800  # Number of frames for the animation
+    frames = 360  # Number of frames for the animation
     elev_start = 30
     elev_end = 60
     azim_start = 0
-    azim_end = 100# 360
+    azim_end = 360
     zoom_start = 0.8
     zoom_end = 0.4
     

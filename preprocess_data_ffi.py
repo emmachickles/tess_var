@@ -1,3 +1,5 @@
+# conda environment: ml
+
 import os
 import pdb
 import numpy as np
@@ -101,7 +103,7 @@ for sector in sector_list:
             light_curve_array = np.delete(light_curve_array, comm1, axis=1)
 
 
-            for light_curve in light_curve_array:
+            for i, light_curve in enumerate(light_curve_array):
 
 
                 # Remove nan values
@@ -116,18 +118,22 @@ for sector in sector_list:
                 inds = np.nonzero(~np.isnan(light_curve))
                 t_clipped, light_curve = t_clipped[inds], light_curve[inds]
 
-                # Apply rolling median filter to the flux data
-                rolling_median = median_filter(light_curve, size=window_size, mode='reflect')
+                # # Apply rolling median filter to the flux data
+                # rolling_median = median_filter(light_curve, size=window_size, mode='reflect')
 
-                # Calculate the rolling standard deviation
-                rolling_std = np.std(light_curve - rolling_median)
+                # # Calculate the rolling standard deviation
+                # rolling_std = np.std(light_curve - rolling_median)
 
-                # Define the upper and lower clip thresholds
-                upper_threshold = rolling_median + sigma_threshold * rolling_std
-                lower_threshold = rolling_median - sigma_threshold * rolling_std
+                # # Define the upper and lower clip thresholds
+                # upper_threshold = rolling_median + sigma_threshold * rolling_std
+                # lower_threshold = rolling_median - sigma_threshold * rolling_std
 
-                # Perform sigma clipping
-                clipped_indices = np.where((light_curve < upper_threshold) & (light_curve > lower_threshold))[0]
+                # # Perform sigma clipping
+                # clipped_indices = np.where((light_curve < upper_threshold) & (light_curve > lower_threshold))[0]
+
+                med = np.median(light_curve)
+                std = np.std(light_curve)
+                clipped_indices = np.where((light_curve>med-std*sigma_threshold) & (light_curve<med+std*sigma_threshold))
 
                 # Return the clipped flux array
                 # clipped_light_curve = np.zeros_like(light_curve)
@@ -155,7 +161,11 @@ for sector in sector_list:
                 # flux_data.append(processed_light_curve)
                 flux_data.append(light_curve)
 
+                if np.std(light_curve) < 0.1:
+                    pdb.set_trace()
+
             ticid_array.extend(ticid)
+            pdb.set_trace() 
 
     # Pad the flux_data with zeros
     padded_flux_data = []
