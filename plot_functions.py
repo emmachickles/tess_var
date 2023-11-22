@@ -1,4 +1,4 @@
-import os
+import os, pdb
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -110,8 +110,6 @@ def plot_tsne_inset(latent_vectors, light_curves, cluster_labels, mydir, cycles=
         
             plt.savefig(mydir+'tsne_cluster_'+str(cluster)+'.png', dpi=300)
         print(mydir+'tsne_cluster_'+str(cluster)+'.png')
-
-
 
 def plot_tsne_cmap(latent_vectors, label_values, label, mydir, latent_tsne=None, cluster_labels=None):
     import matplotlib.cm as cm
@@ -526,7 +524,8 @@ def movie_cluster(latent_vectors, cluster_labels, mydir, latent_tsne=None):
     print('Saved '+mydir+filename)
     
 
-def plot_anomaly(latent_vectors, mydir, n_neighbors=20, latent_tsne=None):
+def plot_anomaly(latent_vectors, light_curves, ticid, mydir, n_neighbors=20, latent_tsne=None,
+                 dim=1):
     import matplotlib as mpl
     from sklearn.neighbors import LocalOutlierFactor
     from sklearn.manifold import TSNE
@@ -555,7 +554,7 @@ def plot_anomaly(latent_vectors, mydir, n_neighbors=20, latent_tsne=None):
         latent_tsne = tsne.fit_transform(latent_vectors)
 
     # Define color map and normalize anomaly scores
-    cmap = plt.get_cmap('viridis')  # Choose any colormap you prefer
+    cmap = plt.get_cmap('spring')  # Choose any colormap you prefer
     normalized_scores = (anomaly_scores - np.min(anomaly_scores)) / (np.max(anomaly_scores) - np.min(anomaly_scores))
 
     # Create a scatter plot
@@ -578,6 +577,33 @@ def plot_anomaly(latent_vectors, mydir, n_neighbors=20, latent_tsne=None):
     plt.tight_layout()
     plt.savefig(mydir + 'tsne_anomaly.png', dpi=100)
     print('Saved '+mydir + 'tsne_anomaly.png')
+
+    # Plot light curves with highest anomaly scores
+    if dim == 1:
+        inds = np.argsort(anomaly_scores)[-10:]
+
+        for i in range(len(inds)):
+
+            lc = light_curves[inds][i]
+            N = len(lc)
+            mean_phi = np.linspace(0, 1-1/N, N) + 0.5/N
+            errbar = (np.max(lc) - np.min(lc)) * 0.05
+
+            tmp = np.append(mean_phi-1, mean_phi)
+            mean_phi = np.append(tmp, mean_phi+1)
+            tmp = np.append(lc, lc)
+            lc = np.append(tmp, lc)
+
+            plt.figure(figsize=(10,5))
+            plt.errorbar(mean_phi, lc, np.ones(len(lc))*errbar, 
+                         color='k', ms=2, ls=' ', elinewidth=1, capsize=2)
+            plt.xlabel('Phases')
+            plt.ylabel('Relative flux')
+            plt.savefig(mydir+'anomaly{}_TIC{}.png'.format(anomaly_scores[inds][i], 
+                                                            ticid[inds][i]))
+            plt.close()
+
+
 
 
 def movie_light_curves(light_curves, mydir, total_frames=100, errors=None, ticid=None):
@@ -651,3 +677,103 @@ def movie_light_curves(light_curves, mydir, total_frames=100, errors=None, ticid
     # Save the animation as an MP4 file
     animation.save(mydir+filename, writer='ffmpeg')#, dpi=200)
     print('Saved '+mydir+filename)
+
+def kl_divergence(z_mean1, z_log_var1, z_mean, z_log_var):
+    return 0.5 * np.sum(z_log_var - z_log_var1 - 1 + \
+                        (z_mean1 - z_mean)**2/np.exp(z_log_var) + \
+                        np.exp(z_log_var1)/np.exp(z_log_var), axis=1)
+
+def plot_tsne_kl(indx, z_mean, z_log_var, light_curves, ticid, mydir, cycles=3, dim=2):
+    from sklearn.manifold import TSNE
+    import matplotlib.cm as cm
+    import matplotlib as mpl
+
+    # Set the text color to white
+    mpl.rcParams['text.color'] = 'white'
+
+    # Perform t-SNE dimensionality reduction on the latent vectors
+    tsne = TSNE(n_components=2, random_state=42)
+    latent_tsne = tsne.fit_transform(z_mean)
+
+    # Extract the t-SNE coordinates
+    tsne_x = latent_tsne[:, 0]
+    tsne_y = latent_tsne[:, 1]
+    
+    # Obtain KL distances
+    dist = kl_divergence(z_mean[indx], z_log_var[indx], z_mean, z_log_var)
+
+    # Define a color map and normalize anomaly scores
+    cmap = plt.get_cmap('spring')
+    normalized_dist = (dist - np.min(dist)) / (np.max(dist) - np.min(dist))
+
+    # Create a scatter plot
+    fig, ax = plt.subplots(facecolor='black')
+    ax.set_axis_off()
+
+    # Scatter plot with points colored by KL divergence
+    scatter = plt.scatter(latent_tsne[:,0], latent_tsne[:,1],
+                          c=normalized_dist, cmap=cmap)
+
+    # Plot insets of lowest KL divergence
+    width = np.abs(np.diff(ax.get_xlim()))[0] * 0.1
+    height = np.abs(np.diff(ax.get_ylim()))[0] * 0.04
+    inds = np.argsort(normalized_dist)[:5]
+    for i in range(len(inds)):
+        inset_ax = ax.inset_axes([latent_tsne[:,0][inds][i], latent_tsne[:,1][inds][i],
+                                  width, height], transform=ax.transData)
+        
+        # Plot light curve on inset axis
+        lc = light_curves[inds][i]
+        c = cmap(normalized_dist[inds][i])
+        n_pts = len(lc)
+        if dim == 1:
+            for j in range(cycles):
+                inset_ax.plot(np.arange(j*n_pts, (j+1)*n_pts), lc, '-k', lw=0.5)
+        if dim == 2:
+            img_len = int(np.sqrt(len(lc)))
+            inset_ax.imshow(lc.reshape((img_len, img_len)))
+
+        # inset_ax.plot(light_curves[inds][i][0], light_curves[inds][i][1], '-k', lw=0.5)
+        inset_ax.spines['top'].set_color(c)
+        inset_ax.spines['bottom'].set_color(c)
+        inset_ax.spines['left'].set_color(c)
+        inset_ax.spines['right'].set_color(c)
+        inset_ax.set_xticks([])
+        inset_ax.set_yticks([])
+
+        if dim == 1:
+            N = len(lc)
+            mean_phi = np.linspace(0, 1-1/N, N) + 0.5/N
+            errbar = (np.max(lc) - np.min(lc)) * 0.05
+
+            if cycles == 3:
+                tmp = np.append(mean_phi-1, mean_phi)
+                mean_phi = np.append(tmp, mean_phi+1)
+                tmp = np.append(lc, lc)
+                lc = np.append(tmp, lc)
+
+            plt.figure(figsize=(10,5))
+            plt.errorbar(mean_phi, lc, np.ones(len(lc))*errbar, 
+                         color='k', ms=2, ls=' ', elinewidth=1, capsize=2)
+            plt.xlabel('Phases')
+            plt.ylabel('Relative flux')
+            plt.savefig(mydir+'kl{}_TIC{}_TIC{}.png'.format(normalized_dist[inds][i], 
+                                                            ticid[indx], ticid[inds][i]))
+            plt.close()
+            
+        
+
+
+    # Set colorbar
+    cbar = fig.colorbar(scatter)
+    cbar.set_label('Normalized KL Divergence', rotation=270, c='white')
+    cbar.ax.yaxis.set_tick_params(color='white')
+    cbar.ax.yaxis.set_ticklabels(cbar.ax.get_yticklabels(), color='white')
+
+    # Set color bar edge color to white
+    cbar.outline.set_edgecolor('white')
+    
+    plt.tight_layout()
+    plt.savefig(mydir + 'tsne_kl_TIC{}.png'.format(ticid[indx]), dpi=100)
+    print('Saved '+mydir+'tsne_kl_TIC{}.png'.format(ticid[indx]))
+    

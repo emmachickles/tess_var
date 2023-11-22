@@ -17,8 +17,6 @@ qflag_dir = "/scratch/echickle/QLPqflags/"
 sector_list = [56]
 cam_list, ccd_list = [1,2,3,4], [1,2,3,4] # !!
 
-
-
 # Hyperparameters
 latent_dim = 10  # Size of the latent space
 num_conv_layers = 5  # Number of convolutional layers in the encoder and decoder
